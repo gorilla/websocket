@@ -23,11 +23,11 @@ func TestJSON(t *testing.T) {
 	expect.A = 1
 	expect.B = "hello"
 
-	if err := WriteJSON(wc, &expect); err != nil {
+	if err := wc.WriteJSON(&expect); err != nil {
 		t.Fatal("write", err)
 	}
 
-	if err := ReadJSON(rc, &actual); err != nil {
+	if err := rc.ReadJSON(&actual); err != nil {
 		t.Fatal("read", err)
 	}
 

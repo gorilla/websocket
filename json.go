@@ -12,7 +12,7 @@ import (
 //
 // See the documentation for encoding/json Marshal for details about the
 // conversion of Go values to JSON.
-func WriteJSON(c *Conn, v interface{}) error {
+func (c *Conn) WriteJSON(v interface{}) error {
 	w, err := c.NextWriter(TextMessage)
 	if err != nil {
 		return err
@@ -30,7 +30,7 @@ func WriteJSON(c *Conn, v interface{}) error {
 //
 // See the documentation for the encoding/json Marshal function for details
 // about the conversion of JSON to a Go value.
-func ReadJSON(c *Conn, v interface{}) error {
+func (c *Conn) ReadJSON(v interface{}) error {
 	_, r, err := c.NextReader()
 	if err != nil {
 		return err
