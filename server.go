@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 )
 
 // HandshakeError describes an error with the handshake from the peer.
@@ -103,4 +104,18 @@ func Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header,
 	}
 
 	return c, nil
+}
+
+// Subprotocols returns the subprotocols requested by the client in the
+// Sec-Websocket-Protocol header.
+func Subprotocols(r *http.Request) []string {
+	h := strings.TrimSpace(r.Header.Get("Sec-Websocket-Protocol"))
+	if h == "" {
+		return nil
+	}
+	protocols := strings.Split(h, ",")
+	for i := range protocols {
+		protocols[i] = strings.TrimSpace(protocols[i])
+	}
+	return protocols
 }
