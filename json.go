@@ -8,6 +8,11 @@ import (
 	"encoding/json"
 )
 
+// DEPRECATED: use c.WriteJSON instead.
+func WriteJSON(c *Conn, v interface{}) error {
+	return c.WriteJSON(v)
+}
+
 // WriteJSON writes the JSON encoding of v to the connection.
 //
 // See the documentation for encoding/json Marshal for details about the
@@ -23,6 +28,11 @@ func (c *Conn) WriteJSON(v interface{}) error {
 		return err1
 	}
 	return err2
+}
+
+// DEPRECATED: use c.WriteJSON instead.
+func ReadJSON(c *Conn, v interface{}) error {
+	return c.ReadJSON(v)
 }
 
 // ReadJSON reads the next JSON-encoded message from the connection and stores
