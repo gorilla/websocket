@@ -14,16 +14,12 @@ import (
 
 // HandshakeError describes an error with the handshake from the peer.
 type HandshakeError struct {
-	Err string
+	message string
 }
 
-func (e HandshakeError) Error() string { return e.Err }
+func (e HandshakeError) Error() string { return e.message }
 
 // Upgrade upgrades the HTTP server connection to the WebSocket protocol.
-//
-// Upgrade returns a HandshakeError if the request is not a WebSocket
-// handshake. Applications should handle errors of this type by replying to the
-// client with an HTTP response.
 //
 // The application is responsible for checking the request origin before
 // calling Upgrade. An example implementation of the same origin policy is:
@@ -33,8 +29,19 @@ func (e HandshakeError) Error() string { return e.Err }
 //		return
 //	}
 //
-// Use the responseHeader to specify cookies (Set-Cookie) and the subprotocol
-// (Sec-WebSocket-Protocol).
+// If the endpoint supports WebSocket subprotocols, then the application is
+// responsible for selecting a subprotocol that is acceptable to the client and
+// echoing that value back to the client. Use the Subprotocols function to get
+// the list of protocols specified by the client. Use the
+// Sec-Websocket-Protocol response header to echo the selected protocol back
+// to the client.
+//
+// Appilcations can set cookies by adding a Set-Cookie header to the
+// response header.
+//
+// If the request is not a valid WebSocket handshake, then Upgrade returns an
+// error of type HandshakeError. Applications should handle this error by
+// replying to the client with an HTTP error response.
 func Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header, readBufSize, writeBufSize int) (*Conn, error) {
 
 	if values := r.Header["Sec-Websocket-Version"]; len(values) == 0 || values[0] != "13" {
