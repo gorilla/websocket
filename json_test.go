@@ -61,3 +61,4 @@ func TestDeprecatedJSON(t *testing.T) {
 		t.Fatal("equal", actual, expect)
 	}
 }
+
