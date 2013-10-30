@@ -33,11 +33,11 @@ func (e HandshakeError) Error() string { return e.message }
 // responsible for selecting a subprotocol that is acceptable to the client and
 // echoing that value back to the client. Use the Subprotocols function to get
 // the list of protocols specified by the client. Use the
-// Sec-Websocket-Protocol response header to echo the selected protocol back
-// to the client.
+// Sec-Websocket-Protocol response header to echo the selected protocol back to
+// the client.
 //
-// Appilcations can set cookies by adding a Set-Cookie header to the
-// response header.
+// Appilcations can set cookies by adding a Set-Cookie header to the response
+// header.
 //
 // If the request is not a valid WebSocket handshake, then Upgrade returns an
 // error of type HandshakeError. Applications should handle this error by
