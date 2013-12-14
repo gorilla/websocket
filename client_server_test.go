@@ -8,11 +8,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -24,15 +24,24 @@ type handshakeHandler struct {
 func (t handshakeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", 405)
-		t.Logf("bad method: %s", r.Method)
+		t.Logf("method = %s, want GET", r.Method)
 		return
 	}
-	if r.Header.Get("Origin") != "http://"+r.Host {
+	if origin := r.Header.Get("Origin"); origin != "http://"+r.Host {
 		http.Error(w, "Origin not allowed", 403)
-		t.Logf("bad origin: %s", r.Header.Get("Origin"))
+		t.Logf("Origin = %s, want %s", origin, r.Host)
 		return
 	}
-	ws, err := Upgrade(w, r, http.Header{"Set-Cookie": {"sessionID=1234"}}, 1024, 1024)
+	subprotos := Subprotocols(r)
+	if !reflect.DeepEqual(subprotos, handshakeDialer.Subprotocols) {
+		http.Error(w, "bad protocol", 400)
+		t.Logf("Subprotocols = %v, want %v", subprotos, handshakeDialer.Subprotocols)
+		return
+	}
+	ws, err := Upgrade(w, r, http.Header{
+		"Set-Cookie":             {"sessionID=1234"},
+		"Sec-Websocket-Protocol": {subprotos[0]},
+	}, 1024, 1024)
 	if _, ok := err.(HandshakeError); ok {
 		t.Logf("bad handshake: %v", err)
 		http.Error(w, "Not a websocket handshake", 400)
@@ -42,6 +51,12 @@ func (t handshakeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer ws.Close()
+
+	if ws.Subprotocol() != subprotos[0] {
+		t.Logf("ws.Subprotocol() = %s, want %s", ws.Subprotocol(), subprotos[0])
+		return
+	}
+
 	for {
 		op, r, err := ws.NextReader()
 		if err != nil {
@@ -66,17 +81,18 @@ func (t handshakeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+var handshakeDialer = &Dialer{
+	Subprotocols:    []string{"p1", "p2"},
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
+
 func TestHandshake(t *testing.T) {
 	s := httptest.NewServer(handshakeHandler{t})
 	defer s.Close()
-	u, _ := url.Parse(s.URL)
-	c, err := net.Dial("tcp", u.Host)
+	ws, resp, err := handshakeDialer.Dial(httpToWs(s.URL), http.Header{"Origin": {s.URL}})
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
-	}
-	ws, resp, err := NewClient(c, u, http.Header{"Origin": {s.URL}}, 1024, 1024)
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
 	}
 	defer ws.Close()
 
@@ -90,24 +106,11 @@ func TestHandshake(t *testing.T) {
 		t.Error("Set-Cookie not received from the server.")
 	}
 
-	w, _ := ws.NextWriter(TextMessage)
-	io.WriteString(w, "HELLO")
-	w.Close()
-	ws.SetReadDeadline(time.Now().Add(1 * time.Second))
-	op, r, err := ws.NextReader()
-	if err != nil {
-		t.Fatalf("NextReader: %v", err)
+	if ws.Subprotocol() != handshakeDialer.Subprotocols[0] {
+		t.Errorf("ws.Subprotocol() = %s, want %s", ws.Subprotocol(), handshakeDialer.Subprotocols[0])
 	}
-	if op != TextMessage {
-		t.Fatalf("op=%d, want %d", op, TextMessage)
-	}
-	b, err := ioutil.ReadAll(r)
-	if err != nil {
-		t.Fatalf("ReadAll: %v", err)
-	}
-	if string(b) != "HELLO" {
-		t.Fatalf("message=%s, want %s", b, "HELLO")
-	}
+
+	sendRecv(t, ws)
 }
 
 type dialHandler struct {
@@ -142,8 +145,14 @@ func (t dialHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func sendRecv(t *testing.T, ws *Conn) {
 	const message = "Hello World!"
+	if err := ws.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetWriteDeadline: %v", err)
+	}
 	if err := ws.WriteMessage(TextMessage, []byte(message)); err != nil {
 		t.Fatalf("WriteMessage: %v", err)
+	}
+	if err := ws.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
 	}
 	_, p, err := ws.ReadMessage()
 	if err != nil {

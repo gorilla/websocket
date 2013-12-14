@@ -83,6 +83,9 @@ func Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header,
 	}
 
 	c := newConn(netConn, true, readBufSize, writeBufSize)
+	if responseHeader != nil {
+		c.subprotocol = responseHeader.Get("Sec-Websocket-Protocol")
+	}
 
 	p := c.writeBuf[:0]
 	p = append(p, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "...)

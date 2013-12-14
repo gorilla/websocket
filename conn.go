@@ -103,8 +103,9 @@ func newMaskKey() [4]byte {
 
 // Conn represents a WebSocket connection.
 type Conn struct {
-	conn     net.Conn
-	isServer bool
+	conn        net.Conn
+	isServer    bool
+	subprotocol string
 
 	// Write fields
 	mu        chan bool // used as mutex to protect write to conn and closeSent
@@ -149,6 +150,11 @@ func newConn(conn net.Conn, isServer bool, readBufSize, writeBufSize int) *Conn 
 	c.SetPingHandler(nil)
 	c.SetPongHandler(nil)
 	return c
+}
+
+// Subprotocol returns the negotiated protocol for the connection.
+func (c *Conn) Subprotocol() string {
+	return c.subprotocol
 }
 
 // Close closes the underlying network connection without sending or waiting for a close frame.

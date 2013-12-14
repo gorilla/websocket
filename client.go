@@ -67,6 +67,7 @@ func NewClient(netConn net.Conn, u *url.URL, requestHeader http.Header, readBufS
 		resp.Header.Get("Sec-Websocket-Accept") != acceptKey {
 		return nil, resp, ErrBadHandshake
 	}
+	c.subprotocol = resp.Header.Get("Sec-Websocket-Protocol")
 	return c, resp, nil
 }
 
@@ -85,6 +86,9 @@ type Dialer struct {
 	// Input and output buffer sizes. If the buffer size is zero, then a
 	// default value of 4096 is used.
 	ReadBufferSize, WriteBufferSize int
+
+	// Subprotocols specifies the client's requested subprotocols.
+	Subprotocols []string
 }
 
 var errMalformedURL = errors.New("malformed ws or wss URL")
@@ -204,6 +208,15 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 	writeBufferSize := d.WriteBufferSize
 	if writeBufferSize == 0 {
 		writeBufferSize = 4096
+	}
+
+	if len(d.Subprotocols) > 0 {
+		h := http.Header{}
+		for k, v := range requestHeader {
+			h[k] = v
+		}
+		h.Set("Sec-Websocket-Protocol", strings.Join(d.Subprotocols, ", "))
+		requestHeader = h
 	}
 
 	conn, resp, err := NewClient(
