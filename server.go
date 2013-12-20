@@ -29,15 +29,19 @@ func (e HandshakeError) Error() string { return e.message }
 //		return
 //	}
 //
-// If the endpoint supports WebSocket subprotocols, then the application is
-// responsible for selecting a subprotocol that is acceptable to the client and
-// echoing that value back to the client. Use the Subprotocols function to get
-// the list of protocols specified by the client. Use the
-// Sec-Websocket-Protocol response header to echo the selected protocol back to
-// the client.
+// If the endpoint supports subprotocols, then the application is responsible
+// for negotiating the protocol used on the connection. Use the Subprotocols()
+// function to get the subprotocols requested by the client. Use the
+// Sec-Websocket-Protocol response header to specify the subprotocol selected
+// by the application.
 //
-// Appilcations can set cookies by adding a Set-Cookie header to the response
-// header.
+// The responseHeader is included in the response to the client's upgrade
+// request. Use the responseHeader to specify cookies (Set-Cookie) and the
+// negotiated subprotocol (Sec-Websocket-Protocol).
+//
+// The connection buffers IO to the underlying network connection. The
+// readBufSize and writeBufSize parameters specify the size of the buffers to
+// use. Messages can be larger than the buffers.
 //
 // If the request is not a valid WebSocket handshake, then Upgrade returns an
 // error of type HandshakeError. Applications should handle this error by
