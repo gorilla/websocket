@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 )
 
-// DEPRECATED: use c.WriteJSON instead.
+// WriteJSON is deprecated, use c.WriteJSON instead.
 func WriteJSON(c *Conn, v interface{}) error {
 	return c.WriteJSON(v)
 }
@@ -30,7 +30,7 @@ func (c *Conn) WriteJSON(v interface{}) error {
 	return err2
 }
 
-// DEPRECATED: use c.ReadJSON instead.
+// ReadJSON is deprecated, use c.ReadJSON instead.
 func ReadJSON(c *Conn, v interface{}) error {
 	return c.ReadJSON(v)
 }

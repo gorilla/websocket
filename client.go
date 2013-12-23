@@ -73,6 +73,7 @@ func NewClient(netConn net.Conn, u *url.URL, requestHeader http.Header, readBufS
 	return c, resp, nil
 }
 
+// A Dialer contains options for connecting to WebSocket server.
 type Dialer struct {
 	// NetDial specifies the dial function for creating TCP connections. If
 	// NetDial is nil, net.Dial is used.
@@ -134,6 +135,7 @@ func parseURL(u string) (useTLS bool, host, port, opaque string, err error) {
 	return useTLS, host, port, opaque, nil
 }
 
+// DefaultDialer is a dialer with all fields set to the default zero values.
 var DefaultDialer *Dialer
 
 // Dial creates a new client connection. Use requestHeader to specify the

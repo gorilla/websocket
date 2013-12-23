@@ -765,7 +765,6 @@ func (c *Conn) SetPongHandler(h func(string) error) {
 	c.handlePong = h
 }
 
-// SetPongHandler sets the handler for
 // FormatCloseMessage formats closeCode and text as a WebSocket close message.
 func FormatCloseMessage(closeCode int, text string) []byte {
 	buf := make([]byte, 2+len(text))
