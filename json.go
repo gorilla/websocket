@@ -30,7 +30,7 @@ func (c *Conn) WriteJSON(v interface{}) error {
 	return err2
 }
 
-// DEPRECATED: use c.WriteJSON instead.
+// DEPRECATED: use c.ReadJSON instead.
 func ReadJSON(c *Conn, v interface{}) error {
 	return c.ReadJSON(v)
 }
