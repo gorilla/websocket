@@ -65,9 +65,19 @@ var (
 	ErrReadLimit = errors.New("websocket: read limit exceeded")
 )
 
+type websocketError struct {
+	msg       string
+	temporary bool
+	timeout   bool
+}
+
+func (e *websocketError) Error() string   { return e.msg }
+func (e *websocketError) Temporary() bool { return e.temporary }
+func (e *websocketError) Timeout() bool   { return e.timeout }
+
 var (
+	errWriteTimeout        = &websocketError{msg: "websocket: write timeout", timeout: true}
 	errBadWriteOpCode      = errors.New("websocket: bad write message type")
-	errWriteTimeout        = errors.New("websocket: write timeout")
 	errWriteClosed         = errors.New("websocket: write closed")
 	errInvalidControlFrame = errors.New("websocket: invalid control frame")
 )
