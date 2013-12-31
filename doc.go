@@ -31,7 +31,7 @@
 //      if err != nil {
 //          return
 //      }
-//      if _, err := conn.WriteMessaage(messageType, p); err != nil {
+//      if err = conn.WriteMessage(messageType, p); err != nil {
 //          return err
 //      }
 //  }
