@@ -63,6 +63,7 @@ var (
 var (
 	ErrCloseSent = errors.New("websocket: close sent")
 	ErrReadLimit = errors.New("websocket: read limit exceeded")
+	ErrWrongType = errors.New("websocket: received wrong type")
 )
 
 type websocketError struct {
@@ -727,6 +728,19 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 	}
 	p, err = ioutil.ReadAll(r)
 	return messageType, p, err
+}
+
+// ReadText reads a new text message from the websocket.
+// When retrieved message was not of type Text: ErrWrongType is returned.
+func (c *Conn) ReadText() (msg string, err error) {
+	messageType, p, err := c.ReadMessage()
+	if err != nil {
+		return "", err
+	}
+	if messageType != TextMessage {
+		return "", ErrWrongType
+	}
+	return string(p), nil
 }
 
 // SetReadDeadline sets the deadline for future calls to NextReader and the
