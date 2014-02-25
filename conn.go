@@ -493,6 +493,12 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 	return nil
 }
 
+// WriteText writes given string with messageType TextMessage
+// Is actually a shorthand for (*Conn).WriteMessage(websocket.TextMessage, []byte(message))
+func (c *Conn) WriteText(message string) error {
+	return c.WriteMessage(TextMessage, []byte(message))
+}
+
 // SetWriteDeadline sets the deadline for future calls to NextWriter and the
 // io.WriteCloser returned from NextWriter. If the deadline is reached, the
 // call will fail with a timeout instead of blocking. A zero value for t means
