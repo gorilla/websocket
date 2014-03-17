@@ -744,6 +744,25 @@ func (c *Conn) SetReadLimit(limit int64) {
 	c.readLimit = limit
 }
 
+// SetLinger sets the behavior of Close() on a connection which still has
+// data waiting to be sent or to be acknowledged. If sec < 0 (the default),
+// Close returns immediately and the operating system finishes sending the
+// data in the background. If sec == 0, Close returns immediately and the
+// operating system discards any unsent or unacknowledged data. If sec > 0,
+// Close blocks for at most sec seconds waiting for data to be sent and
+// acknowledged.
+func (c *Conn) SetLinger(sec int) error {
+	return c.conn.(*net.TCPConn).SetLinger(sec)
+}
+
+// SetNoDelay controls whether the operating system should delay packet
+// transmission in hopes of sending fewer packets (Nagle's algorithm).
+// The default is true (no delay), meaning that data is sent as soon as
+// possible after a Write.
+func (c *Conn) SetNoDelay(noDelay bool) error {
+	return c.conn.(*net.TCPConn).SetNoDelay(noDelay)
+}
+
 // SetPingHandler sets the handler for ping messages received from the peer.
 // The default ping handler sends a pong to the peer.
 func (c *Conn) SetPingHandler(h func(string) error) {
