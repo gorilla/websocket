@@ -140,3 +140,13 @@ func TestReadLimit(t *testing.T) {
 		t.Fatalf("io.Copy() returned %v", err)
 	}
 }
+
+func TestUnderlyingConn(t *testing.T) {
+	var b1, b2 bytes.Buffer
+	fc := fakeNetConn{Reader: &b1, Writer: &b2}
+	c := newConn(fc, true, 1024, 1024)
+	ul := c.UnderlyingConn()
+	if ul != fc {
+		t.Fatalf("Underlying conn is not what it should be.")
+	}
+}

@@ -765,6 +765,12 @@ func (c *Conn) SetPongHandler(h func(string) error) {
 	c.handlePong = h
 }
 
+// UnderlyingConn returns the internal net.Conn. This can be used to further
+// modifications to connection specific flags.
+func (c *Conn) UnderlyingConn() net.Conn {
+	return c.conn
+}
+
 // FormatCloseMessage formats closeCode and text as a WebSocket close message.
 func FormatCloseMessage(closeCode int, text string) []byte {
 	buf := make([]byte, 2+len(text))
