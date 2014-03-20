@@ -5,8 +5,9 @@ Gorilla WebSocket is a [Go](http://golang.org/) implementation of the
 
 ### Documentation
 
-* [Reference](http://godoc.org/github.com/gorilla/websocket)
+* [API Reference](http://godoc.org/github.com/gorilla/websocket)
 * [Chat example](https://github.com/gorilla/websocket/tree/master/examples/chat)
+* [File watch example](https://github.com/gorilla/websocket/tree/master/examples/filewatch)
 
 ### Status
 
