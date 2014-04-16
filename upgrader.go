@@ -144,6 +144,8 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 				break
 			}
 		}
+	} else if responseHeader != nil {
+		c.subprotocol = responseHeader.Get("Sec-Websocket-Protocol")
 	}
 
 	p := c.writeBuf[:0]
@@ -156,6 +158,9 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		p = append(p, "\r\n"...)
 	}
 	for k, vs := range responseHeader {
+		if k == "Sec-Websocket-Protocol" {
+			continue
+		}
 		for _, v := range vs {
 			p = append(p, k...)
 			p = append(p, ": "...)
