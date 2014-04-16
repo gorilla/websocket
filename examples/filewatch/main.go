@@ -107,20 +107,17 @@ func writer(ws *websocket.Conn, lastMod time.Time) {
 }
 
 func serveWs(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		http.Error(w, "Method not allowed", 405)
-		return
-	}
-	if r.Header.Get("Origin") != "http://"+r.Host {
-		http.Error(w, "Origin not allowed", 403)
-		return
-	}
-	ws, err := websocket.Upgrade(w, r, nil, 1024, 1024)
-	if _, ok := err.(websocket.HandshakeError); ok {
-		http.Error(w, "Not a websocket handshake", 400)
-		return
-	} else if err != nil {
-		log.Println(err)
+	u := websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return r.Header.Get("Origin") == "http://"+r.Host
+		}}
+	ws, err := u.Upgrade(w, r, nil)
+	if err != nil {
+		if _, ok := err.(websocket.HandshakeError); !ok {
+			log.Println(err)
+		}
 		return
 	}
 
