@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -42,7 +43,8 @@ type Upgrader struct {
 	Error func(w http.ResponseWriter, r *http.Request, status int, reason error)
 
 	// CheckOrigin returns true if the request Origin header is acceptable.
-	// If CheckOrigin is nil, then no origin check is done.
+	// If CheckOrigin is nil, the host in the Origin header must match
+	// the host of the request.
 	CheckOrigin func(r *http.Request) bool
 }
 
@@ -68,6 +70,19 @@ func (u *Upgrader) hasSubprotocol(subprotocol string) bool {
 	}
 
 	return false
+}
+
+// Check if host in Origin header matches host of request
+func (u *Upgrader) checkSameOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return false
+	}
+	uri, err := url.ParseRequestURI(origin)
+	if err != nil {
+		return false
+	}
+	return uri.Host == r.Host
 }
 
 // Upgrade upgrades the HTTP server connection to the WebSocket protocol.
@@ -100,7 +115,11 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		return nil, err
 	}
 
-	if u.CheckOrigin != nil && !u.CheckOrigin(r) {
+	checkOrigin := u.CheckOrigin
+	if checkOrigin == nil {
+		checkOrigin = u.checkSameOrigin
+	}
+	if !checkOrigin(r) {
 		err := HandshakeError{"websocket: origin not allowed"}
 		u.returnError(w, r, http.StatusForbidden, err)
 		return nil, err
@@ -228,6 +247,10 @@ func Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header,
 	u := Upgrader{ReadBufferSize: readBufSize, WriteBufferSize: writeBufSize}
 	u.Error = func(w http.ResponseWriter, r *http.Request, status int, reason error) {
 		// don't return errors to maintain backwards compatibility
+	}
+	u.CheckOrigin = func(r *http.Request) bool {
+		// allow all connections by default
+		return true
 	}
 	return u.Upgrade(w, r, responseHeader)
 }

@@ -109,10 +109,7 @@ func writer(ws *websocket.Conn, lastMod time.Time) {
 func serveWs(w http.ResponseWriter, r *http.Request) {
 	u := websocket.Upgrader{
 		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
-		CheckOrigin: func(r *http.Request) bool {
-			return r.Header.Get("Origin") == "http://"+r.Host
-		}}
+		WriteBufferSize: 1024}
 	ws, err := u.Upgrade(w, r, nil)
 	if err != nil {
 		if _, ok := err.(websocket.HandshakeError); !ok {

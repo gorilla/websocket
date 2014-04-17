@@ -30,7 +30,10 @@ import (
 func echoCopy(w http.ResponseWriter, r *http.Request, writerOnly bool) {
 	u := websocket.Upgrader{
 		ReadBufferSize:  4096,
-		WriteBufferSize: 4096}
+		WriteBufferSize: 4096,
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		}}
 	conn, err := u.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Upgrade:", err)
@@ -92,7 +95,10 @@ func echoCopyFull(w http.ResponseWriter, r *http.Request) {
 func echoReadAll(w http.ResponseWriter, r *http.Request, writeMessage bool) {
 	u := websocket.Upgrader{
 		ReadBufferSize:  4096,
-		WriteBufferSize: 4096}
+		WriteBufferSize: 4096,
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		}}
 	conn, err := u.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Upgrade:", err)
