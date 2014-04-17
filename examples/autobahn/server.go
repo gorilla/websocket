@@ -39,7 +39,6 @@ func echoCopy(w http.ResponseWriter, r *http.Request, writerOnly bool) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Upgrade:", err)
-		http.Error(w, "Bad request", 400)
 		return
 	}
 	defer conn.Close()
