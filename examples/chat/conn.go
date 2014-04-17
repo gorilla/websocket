@@ -25,6 +25,11 @@ const (
 	maxMessageSize = 512
 )
 
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
+
 // connection is an middleman between the websocket connection and the hub.
 type connection struct {
 	// The websocket connection.
@@ -89,10 +94,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", 405)
 		return
 	}
-	u := websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024}
-	ws, err := u.Upgrade(w, r, nil)
+	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		if _, ok := err.(websocket.HandshakeError); !ok {
 			log.Println(err)

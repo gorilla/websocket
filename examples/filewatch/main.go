@@ -35,6 +35,10 @@ var (
 	addr      = flag.String("addr", ":8080", "http service address")
 	homeTempl = template.Must(template.New("").Parse(homeHTML))
 	filename  string
+	upgrader  = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+	}
 )
 
 func readFileIfModified(lastMod time.Time) ([]byte, time.Time, error) {
@@ -107,10 +111,7 @@ func writer(ws *websocket.Conn, lastMod time.Time) {
 }
 
 func serveWs(w http.ResponseWriter, r *http.Request) {
-	u := websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024}
-	ws, err := u.Upgrade(w, r, nil)
+	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		if _, ok := err.(websocket.HandshakeError); !ok {
 			log.Println(err)
