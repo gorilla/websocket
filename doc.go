@@ -6,14 +6,19 @@
 //
 // Overview
 //
-// The Conn type represents a WebSocket connection. A server application calls
-// the Upgrade function from an HTTP request handler to get a pointer to a
-// Conn:
+// The Conn type represents a WebSocket connection. A server application uses
+// the Upgrade function from an Upgrader object with a HTTP request handler
+// to get a pointer to a Conn:
+//
+//  var upgrader = websocket.Upgrader{
+//      ReadBufferSize:  1024,
+//      WriteBufferSize: 1024,
+//  }
 //
 //  func handler(w http.ResponseWriter, r *http.Request) {
-//      conn, err := websocket.Upgrade(w, r, nil, 1024, 1024)
+//      conn, err := upgrader.Upgrade(w, r, nil)
 //      if _, ok := err.(websocket.HandshakeError); ok {
-//          http.Error(w, "Not a websocket handshake", 400)
+//          ... an error message already has been sent.
 //          return
 //      } else if err != nil {
 //          log.Println(err)

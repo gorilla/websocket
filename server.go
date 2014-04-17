@@ -191,8 +191,6 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	return c, nil
 }
 
-// This method is deprecated, use websocket.Upgrader instead.
-//
 // Upgrade upgrades the HTTP server connection to the WebSocket protocol.
 //
 // The application is responsible for checking the request origin before
@@ -220,6 +218,8 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 // If the request is not a valid WebSocket handshake, then Upgrade returns an
 // error of type HandshakeError. Applications should handle this error by
 // replying to the client with an HTTP error response.
+//
+// This method is deprecated, use websocket.Upgrader instead.
 func Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header, readBufSize, writeBufSize int) (*Conn, error) {
 	u := Upgrader{ReadBufferSize: readBufSize, WriteBufferSize: writeBufSize}
 	u.Error = func(w http.ResponseWriter, r *http.Request, status int, reason error) {
