@@ -21,8 +21,8 @@ type HandshakeError struct {
 func (e HandshakeError) Error() string { return e.message }
 
 const (
-	DEFAULT_READ_BUFFER_SIZE  = 4096
-	DEFAULT_WRITE_BUFFER_SIZE = 4096
+	defaultReadBufferSize  = 4096
+	defaultWriteBufferSize = 4096
 )
 
 type Upgrader struct {
@@ -136,11 +136,11 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 
 	readBufSize := u.ReadBufferSize
 	if readBufSize == 0 {
-		readBufSize = DEFAULT_READ_BUFFER_SIZE
+		readBufSize = defaultReadBufferSize
 	}
 	writeBufSize := u.WriteBufferSize
 	if writeBufSize == 0 {
-		writeBufSize = DEFAULT_WRITE_BUFFER_SIZE
+		writeBufSize = defaultWriteBufferSize
 	}
 	c := newConn(netConn, true, readBufSize, writeBufSize)
 
