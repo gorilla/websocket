@@ -1,4 +1,4 @@
-# Gorilla WebSocket 
+# Gorilla WebSocket
 
 Gorilla WebSocket is a [Go](http://golang.org/) implementation of the
 [WebSocket](http://www.rfc-editor.org/rfc/rfc6455.txt) protocol.
@@ -13,7 +13,7 @@ Gorilla WebSocket is a [Go](http://golang.org/) implementation of the
 
 The Gorilla WebSocket package provides a complete and tested implementation of
 the [WebSocket](http://www.rfc-editor.org/rfc/rfc6455.txt) protocol. The
-package API is stable. 
+package API is stable.
 
 ### Installation
 
@@ -34,17 +34,19 @@ subdirectory](https://github.com/gorilla/websocket/tree/master/examples/autobahn
 <th><a href="http://godoc.org/code.google.com/p/go.net/websocket">go.net</a></th>
 </tr>
 <tr>
-<tr><td>Protocol support</td><td>RFC 6455</td><td>RFC 6455</td></tr>
+<tr><td>Protocol support</td><td>RFC 6455</td><td>RFC 6455, see notes</td></tr>
 <tr><td>Limit size of received message</td><td>Yes</td><td>No</td></tr>
 <tr><td>Send pings and receive pongs</td><td>Yes</td><td>No</td></tr>
 <tr><td>Send close message</td><td>Yes</td><td>No</td></tr>
-<tr><td>Read message using io.Reader</td><td>Yes</td><td>No, see note</td></tr>
-<tr><td>Write message using io.WriteCloser</td><td>Yes</td><td>No, see note</td></tr>
+<tr><td>Read message using io.Reader</td><td>Yes</td><td>No, see notes</td></tr>
+<tr><td>Write message using io.WriteCloser</td><td>Yes</td><td>No, see notes</td></tr>
 <tr><td>Encode, decode JSON message</td><td>Yes</td><td>Yes</td></tr>
 </table>
 
-Note: The go.net io.Reader and io.Writer operate across WebSocket message
-boundaries. Read returns when the input buffer is full or a message boundary is
-encountered, Each call to Write sends a message. The Gorilla io.Reader and
-io.WriteCloser operate on a single WebSocket message.
+Notes:
 
+- The go.net package does not handle fragmented messages.
+- The go.net io.Reader and io.Writer operate across WebSocket frame boundaries.
+  Read returns when the input buffer is full or a frame boundary is
+  encountered, Each call to Write sends a single frame message. The Gorilla
+  io.Reader and io.WriteCloser operate on a single WebSocket message.
