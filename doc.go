@@ -17,10 +17,7 @@
 //
 //  func handler(w http.ResponseWriter, r *http.Request) {
 //      conn, err := upgrader.Upgrade(w, r, nil)
-//      if _, ok := err.(websocket.HandshakeError); ok {
-//          ... an error message already has been sent.
-//          return
-//      } else if err != nil {
+//      if err != nil {
 //          log.Println(err)
 //          return
 //      }
