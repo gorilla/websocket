@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-var timeoutErrImplementsNetError net.Error = errWriteTimeout
+var _ net.Error = errWriteTimeout
 
 type fakeNetConn struct {
 	io.Reader
