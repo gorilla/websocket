@@ -17,6 +17,42 @@ import (
 	"time"
 )
 
+func sendRecv(t *testing.T, ws *Conn) {
+	const message = "Hello World!"
+	if err := ws.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetWriteDeadline: %v", err)
+	}
+	if err := ws.WriteMessage(TextMessage, []byte(message)); err != nil {
+		t.Fatalf("WriteMessage: %v", err)
+	}
+	if err := ws.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
+	_, p, err := ws.ReadMessage()
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+	if string(p) != message {
+		t.Fatalf("message=%s, want %s", p, message)
+	}
+}
+
+func httpToWs(u string) string {
+	return "ws" + u[len("http"):]
+}
+
+var handshakeUpgrader = &Upgrader{
+	Subprotocols:    []string{"p0", "p1"},
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
+
+var handshakeDialer = &Dialer{
+	Subprotocols:    []string{"p1", "p2"},
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
+
 type handshakeHandler struct {
 	*testing.T
 }
@@ -27,33 +63,21 @@ func (t handshakeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		t.Logf("method = %s, want GET", r.Method)
 		return
 	}
-	if origin := r.Header.Get("Origin"); origin != "http://"+r.Host {
-		http.Error(w, "Origin not allowed", 403)
-		t.Logf("Origin = %s, want %s", origin, r.Host)
-		return
-	}
 	subprotos := Subprotocols(r)
 	if !reflect.DeepEqual(subprotos, handshakeDialer.Subprotocols) {
 		http.Error(w, "bad protocol", 400)
 		t.Logf("Subprotocols = %v, want %v", subprotos, handshakeDialer.Subprotocols)
 		return
 	}
-	ws, err := Upgrade(w, r, http.Header{
-		"Set-Cookie":             {"sessionID=1234"},
-		"Sec-Websocket-Protocol": {subprotos[0]},
-	}, 1024, 1024)
-	if _, ok := err.(HandshakeError); ok {
-		t.Logf("bad handshake: %v", err)
-		http.Error(w, "Not a websocket handshake", 400)
-		return
-	} else if err != nil {
+	ws, err := handshakeUpgrader.Upgrade(w, r, http.Header{"Set-Cookie": {"sessionID=1234"}})
+	if err != nil {
 		t.Logf("upgrade error: %v", err)
 		return
 	}
 	defer ws.Close()
 
-	if ws.Subprotocol() != subprotos[0] {
-		t.Logf("ws.Subprotocol() = %s, want %s", ws.Subprotocol(), subprotos[0])
+	if ws.Subprotocol() != "p1" {
+		t.Logf("ws.Subprotocol() = %s, want p1", ws.Subprotocol())
 		return
 	}
 
@@ -81,12 +105,6 @@ func (t handshakeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var handshakeDialer = &Dialer{
-	Subprotocols:    []string{"p1", "p2"},
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
-
 func TestHandshake(t *testing.T) {
 	s := httptest.NewServer(handshakeHandler{t})
 	defer s.Close()
@@ -106,10 +124,9 @@ func TestHandshake(t *testing.T) {
 		t.Error("Set-Cookie not received from the server.")
 	}
 
-	if ws.Subprotocol() != handshakeDialer.Subprotocols[0] {
-		t.Errorf("ws.Subprotocol() = %s, want %s", ws.Subprotocol(), handshakeDialer.Subprotocols[0])
+	if ws.Subprotocol() != "p1" {
+		t.Errorf("ws.Subprotocol() = %s, want p1", ws.Subprotocol())
 	}
-
 	sendRecv(t, ws)
 }
 
@@ -117,13 +134,15 @@ type dialHandler struct {
 	*testing.T
 }
 
+var dialUpgrader = &Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin:     func(r *http.Request) bool { return true },
+}
+
 func (t dialHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ws, err := Upgrade(w, r, nil, 1024, 1024)
-	if _, ok := err.(HandshakeError); ok {
-		t.Logf("bad handshake: %v", err)
-		http.Error(w, "Not a websocket handshake", 400)
-		return
-	} else if err != nil {
+	ws, err := dialUpgrader.Upgrade(w, r, nil)
+	if err != nil {
 		t.Logf("upgrade error: %v", err)
 		return
 	}
@@ -141,30 +160,6 @@ func (t dialHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-}
-
-func sendRecv(t *testing.T, ws *Conn) {
-	const message = "Hello World!"
-	if err := ws.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
-		t.Fatalf("SetWriteDeadline: %v", err)
-	}
-	if err := ws.WriteMessage(TextMessage, []byte(message)); err != nil {
-		t.Fatalf("WriteMessage: %v", err)
-	}
-	if err := ws.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
-		t.Fatalf("SetReadDeadline: %v", err)
-	}
-	_, p, err := ws.ReadMessage()
-	if err != nil {
-		t.Fatalf("ReadMessage: %v", err)
-	}
-	if string(p) != message {
-		t.Fatalf("message=%s, want %s", p, message)
-	}
-}
-
-func httpToWs(u string) string {
-	return "ws" + u[len("http"):]
 }
 
 func TestDial(t *testing.T) {
