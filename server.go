@@ -191,6 +191,9 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		netConn.Close()
 		return nil, err
 	}
+	if u.HandshakeTimeout > 0 {
+		netConn.SetWriteDeadline(time.Time{})
+	}
 
 	return c, nil
 }
