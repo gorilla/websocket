@@ -39,7 +39,7 @@ func NewClient(netConn net.Conn, u *url.URL, requestHeader http.Header, readBufS
 	p = append(p, "GET "...)
 	p = append(p, u.RequestURI()...)
 	p = append(p, " HTTP/1.1\r\nHost: "...)
-	p = append(p, u.Host...)
+	p = append(p, []byte(strings.Split(u.Host, ":")[0])...)
 	// "Upgrade" is capitalized for servers that do not use case insensitive
 	// comparisons on header tokens.
 	p = append(p, "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: "...)
