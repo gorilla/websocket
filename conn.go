@@ -498,11 +498,10 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 	return nil
 }
 
-// SetWriteDeadline sets the deadline for future calls to NextWriter and the
-// io.WriteCloser returned from NextWriter. If the deadline is reached, the
-// call will fail with a timeout instead of blocking. A zero value for t means
-// Write will not time out. Even if Write times out, it may return n > 0,
-// indicating that some of the data was successfully written.
+// SetWriteDeadline sets the write deadline on the underlying network
+// connection. After a write has timed out, the websocket state is corrupt and
+// all future writes will return an error. A zero value for t means writes will
+// not time out 
 func (c *Conn) SetWriteDeadline(t time.Time) error {
 	c.writeDeadline = t
 	return nil
@@ -734,10 +733,10 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 	return messageType, p, err
 }
 
-// SetReadDeadline sets the deadline for future calls to NextReader and the
-// io.Reader returned from NextReader. If the deadline is reached, the call
-// will fail with a timeout instead of blocking. A zero value for t means that
-// the methods will not time out.
+// SetReadDeadline sets the read deadline on the underlying network connection.
+// After a read has timed out, the websocket connection state is corrupt and
+// all future reads will return an error. A zero value for t means reads will
+// not time out.
 func (c *Conn) SetReadDeadline(t time.Time) error {
 	return c.conn.SetReadDeadline(t)
 }
