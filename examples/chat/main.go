@@ -20,7 +20,7 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != "GET" {
-		http.Error(w, "Method nod allowed", 405)
+		http.Error(w, "Method not allowed", 405)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
