@@ -184,6 +184,9 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	}
 	p = append(p, "\r\n"...)
 
+	// Clear deadlines set by HTTP server.
+	netConn.SetDeadline(time.Time{})
+
 	if u.HandshakeTimeout > 0 {
 		netConn.SetWriteDeadline(time.Now().Add(u.HandshakeTimeout))
 	}
