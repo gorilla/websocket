@@ -137,7 +137,6 @@ type dialHandler struct {
 var dialUpgrader = &Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
 func (t dialHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -238,6 +237,15 @@ func TestDialBadScheme(t *testing.T) {
 	s := httptest.NewServer(dialHandler{t})
 	defer s.Close()
 	_, _, err := DefaultDialer.Dial(s.URL, nil)
+	if err == nil {
+		t.Fatalf("Dial() did not return error")
+	}
+}
+
+func TestDialBadOrigin(t *testing.T) {
+	s := httptest.NewServer(dialHandler{t})
+	defer s.Close()
+	_, _, err := DefaultDialer.Dial(s.URL, http.Header{"Origin": {"bad"}})
 	if err == nil {
 		t.Fatalf("Dial() did not return error")
 	}
