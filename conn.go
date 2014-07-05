@@ -615,7 +615,9 @@ func (c *Conn) advanceFrame() (int, error) {
 		if _, err := io.ReadFull(c.br, payload); err != nil {
 			return noFrame, err
 		}
-		maskBytes(c.readMaskKey, 0, payload)
+		if c.isServer {
+			maskBytes(c.readMaskKey, 0, payload)
+		}
 	}
 
 	// 7. Process control frame payload.
@@ -698,7 +700,9 @@ func (r messageReader) Read(b []byte) (n int, err error) {
 			}
 			n, err := r.c.br.Read(b)
 			r.c.readErr = hideTempErr(err)
-			r.c.readMaskPos = maskBytes(r.c.readMaskKey, r.c.readMaskPos, b[:n])
+			if r.c.isServer {
+				r.c.readMaskPos = maskBytes(r.c.readMaskKey, r.c.readMaskPos, b[:n])
+			}
 			r.c.readRemaining -= int64(n)
 			return n, r.c.readErr
 		}

@@ -107,6 +107,42 @@ func TestFraming(t *testing.T) {
 	}
 }
 
+func TestControl(t *testing.T) {
+	const message = "this is a ping/pong messsage"
+	for _, isServer := range []bool{true, false} {
+		for _, isWriteControl := range []bool{true, false} {
+			name := fmt.Sprintf("s:%v, wc:%v", isServer, isWriteControl)
+			var connBuf bytes.Buffer
+			wc := newConn(fakeNetConn{Reader: nil, Writer: &connBuf}, isServer, 1024, 1024)
+			rc := newConn(fakeNetConn{Reader: &connBuf, Writer: nil}, !isServer, 1024, 1024)
+			if isWriteControl {
+				wc.WriteControl(PongMessage, []byte(message), time.Now().Add(time.Second))
+			} else {
+				w, err := wc.NextWriter(PongMessage)
+				if err != nil {
+					t.Errorf("%s: wc.NextWriter() returned %v", name, err)
+					continue
+				}
+				if _, err := w.Write([]byte(message)); err != nil {
+					t.Errorf("%s: w.Write() returned %v", name, err)
+					continue
+				}
+				if err := w.Close(); err != nil {
+					t.Errorf("%s: w.Close() returned %v", name, err)
+					continue
+				}
+				var actualMessage string
+				rc.SetPongHandler(func(s string) error { actualMessage = s; return nil })
+				rc.NextReader()
+				if actualMessage != message {
+					t.Errorf("%s: pong=%q, want %q", name, actualMessage, message)
+					continue
+				}
+			}
+		}
+	}
+}
+
 func TestReadLimit(t *testing.T) {
 
 	const readLimit = 512
