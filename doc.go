@@ -102,4 +102,19 @@
 // methods (NextReader, SetReadDeadline, ReadMessage). The Close and
 // WriteControl methods can be called concurrently with all other methods.
 //
+// Read is Required
+//
+// The application must read the connection to process ping and close messages
+// sent from the peer. If the application is not otherwise interested in
+// messages from the peer, then the application should start a goroutine to read
+// and discard messages from the peer. A simple example is:
+//
+//  func readLoop(c *websocket.Conn) {
+//      for {
+//          if _, _, err := c.NextReader(); err != nil {
+//              c.Close()
+//              break
+//          }
+//      }
+//  }
 package websocket
