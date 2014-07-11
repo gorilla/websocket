@@ -143,6 +143,56 @@ func TestControl(t *testing.T) {
 	}
 }
 
+func TestCloseBeforeFinalFrame(t *testing.T) {
+	const bufSize = 512
+
+	var b1, b2 bytes.Buffer
+	wc := newConn(fakeNetConn{Reader: nil, Writer: &b1}, false, 1024, bufSize)
+	rc := newConn(fakeNetConn{Reader: &b1, Writer: &b2}, true, 1024, 1024)
+
+	w, _ := wc.NextWriter(BinaryMessage)
+	w.Write(make([]byte, bufSize+bufSize/2))
+	wc.WriteControl(CloseMessage, []byte{}, time.Now().Add(10*time.Second))
+	w.Close()
+
+	op, r, err := rc.NextReader()
+	if op != BinaryMessage || err != nil {
+		t.Fatalf("NextReader() returned %d, %v", op, err)
+	}
+	_, err = io.Copy(ioutil.Discard, r)
+	if err != io.ErrUnexpectedEOF {
+		t.Fatalf("io.Copy() returned %v, want %v", err, io.ErrUnexpectedEOF)
+	}
+	_, _, err = rc.NextReader()
+	if err != io.EOF {
+		t.Fatalf("NextReader() returned %v, want %v", err, io.EOF)
+	}
+}
+
+func TestEOFBeforeFinalFrame(t *testing.T) {
+	const bufSize = 512
+
+	var b1, b2 bytes.Buffer
+	wc := newConn(fakeNetConn{Reader: nil, Writer: &b1}, false, 1024, bufSize)
+	rc := newConn(fakeNetConn{Reader: &b1, Writer: &b2}, true, 1024, 1024)
+
+	w, _ := wc.NextWriter(BinaryMessage)
+	w.Write(make([]byte, bufSize+bufSize/2))
+
+	op, r, err := rc.NextReader()
+	if op != BinaryMessage || err != nil {
+		t.Fatalf("NextReader() returned %d, %v", op, err)
+	}
+	_, err = io.Copy(ioutil.Discard, r)
+	if err != io.ErrUnexpectedEOF {
+		t.Fatalf("io.Copy() returned %v, want %v", err, io.ErrUnexpectedEOF)
+	}
+	_, _, err = rc.NextReader()
+	if err != io.ErrUnexpectedEOF {
+		t.Fatalf("NextReader() returned %v, want %v", err, io.ErrUnexpectedEOF)
+	}
+}
+
 func TestReadLimit(t *testing.T) {
 
 	const readLimit = 512
