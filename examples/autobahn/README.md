@@ -10,4 +10,4 @@ and start the client test driver
 
     wstest -m fuzzingclient -s fuzzingclient.json
 
-When the client completes, it writes a report to reports/servers/index.html.
+When the client completes, it writes a report to reports/clients/index.html.
