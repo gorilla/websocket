@@ -38,7 +38,7 @@ func ReadJSON(c *Conn, v interface{}) error {
 // ReadJSON reads the next JSON-encoded message from the connection and stores
 // it in the value pointed to by v.
 //
-// See the documentation for the encoding/json Marshal function for details
+// See the documentation for the encoding/json Unmarshal function for details
 // about the conversion of JSON to a Go value.
 func (c *Conn) ReadJSON(v interface{}) error {
 	_, r, err := c.NextReader()
