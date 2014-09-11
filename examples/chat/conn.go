@@ -88,7 +88,7 @@ func (c *connection) writePump() {
 	}
 }
 
-// serverWs handles webocket requests from the peer.
+// serverWs handles websocket requests from the peer.
 func serveWs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", 405)
