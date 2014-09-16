@@ -137,6 +137,9 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	}
 	var rw *bufio.ReadWriter
 	netConn, rw, err = h.Hijack()
+	if err != nil {
+		return u.returnError(w, r, http.StatusInternalServerError, err.Error())
+	}
 	br = rw.Reader
 
 	if br.Buffered() > 0 {
