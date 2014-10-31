@@ -97,10 +97,13 @@
 //
 // Concurrency
 //
-// A Conn supports a single concurrent caller to the write methods (NextWriter,
-// SetWriteDeadline, WriteMessage) and a single concurrent caller to the read
-// methods (NextReader, SetReadDeadline, ReadMessage). The Close and
-// WriteControl methods can be called concurrently with all other methods.
+// Connections do not support concurrent calls to the write methods
+// (NextWriter, SetWriteDeadline, WriteMessage) or concurrent calls to the read
+// methods methods (NextReader, SetReadDeadline, ReadMessage).  Connections do
+// support a concurrent reader and writer.
+//
+// The Close and WriteControl methods can be called concurrently with all other
+// methods.
 //
 // Read is Required
 //
@@ -139,7 +142,7 @@
 //      CheckOrigin: func(r *http.Request) bool { return true },
 //   }
 //
-// The deprecated Upgrade function does enforce an origin policy. It's the
+// The deprecated Upgrade function does not enforce an origin policy. It's the
 // application's responsibility to check the Origin header before calling
 // Upgrade.
 package websocket
