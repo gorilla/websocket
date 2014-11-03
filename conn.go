@@ -520,7 +520,7 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 // SetWriteDeadline sets the write deadline on the underlying network
 // connection. After a write has timed out, the websocket state is corrupt and
 // all future writes will return an error. A zero value for t means writes will
-// not time out
+// not time out.
 func (c *Conn) SetWriteDeadline(t time.Time) error {
 	c.writeDeadline = t
 	return nil
