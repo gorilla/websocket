@@ -215,16 +215,6 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		}
 	}
 
-	readBufferSize := d.ReadBufferSize
-	if readBufferSize == 0 {
-		readBufferSize = 4096
-	}
-
-	writeBufferSize := d.WriteBufferSize
-	if writeBufferSize == 0 {
-		writeBufferSize = 4096
-	}
-
 	if len(d.Subprotocols) > 0 {
 		h := http.Header{}
 		for k, v := range requestHeader {
@@ -234,7 +224,7 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		requestHeader = h
 	}
 
-	conn, resp, err := NewClient(netConn, u, requestHeader, readBufferSize, writeBufferSize)
+	conn, resp, err := NewClient(netConn, u, requestHeader, d.ReadBufferSize, d.WriteBufferSize)
 	if err != nil {
 		return nil, resp, err
 	}

@@ -16,6 +16,20 @@ import (
 	"time"
 )
 
+const (
+	maxFrameHeaderSize         = 2 + 8 + 4 // Fixed header + length + mask
+	maxControlFramePayloadSize = 125
+	finalBit                   = 1 << 7
+	maskBit                    = 1 << 7
+	writeWait                  = time.Second
+
+	defaultReadBufferSize  = 4096
+	defaultWriteBufferSize = 4096
+
+	continuationFrame = 0
+	noFrame           = -1
+)
+
 // Close codes defined in RFC 6455, section 11.7.
 const (
 	CloseNormalClosure           = 1000
@@ -55,20 +69,13 @@ const (
 	PongMessage = 10
 )
 
-var (
-	continuationFrame = 0
-	noFrame           = -1
-)
+// ErrCloseSent is returned when the application writes a message to the
+// connection after sending a close message.
+var ErrCloseSent = errors.New("websocket: close sent")
 
-var (
-	// ErrCloseSent is returned when the application writes a message to the
-	// connection after sending a close message.
-	ErrCloseSent = errors.New("websocket: close sent")
-
-	// ErrReadLimit is returned when reading a message that is larger than the
-	// read limit set for the connection.
-	ErrReadLimit = errors.New("websocket: read limit exceeded")
-)
+// ErrReadLimit is returned when reading a message that is larger than the
+// read limit set for the connection.
+var ErrReadLimit = errors.New("websocket: read limit exceeded")
 
 // netError satisfies the net Error interface.
 type netError struct {
@@ -97,14 +104,6 @@ var (
 	errBadWriteOpCode      = errors.New("websocket: bad write message type")
 	errWriteClosed         = errors.New("websocket: write closed")
 	errInvalidControlFrame = errors.New("websocket: invalid control frame")
-)
-
-const (
-	maxFrameHeaderSize         = 2 + 8 + 4 // Fixed header + length + mask
-	maxControlFramePayloadSize = 125
-	finalBit                   = 1 << 7
-	maskBit                    = 1 << 7
-	writeWait                  = time.Second
 )
 
 func hideTempErr(err error) error {
@@ -167,17 +166,24 @@ type Conn struct {
 	handlePing    func(string) error
 }
 
-func newConn(conn net.Conn, isServer bool, readBufSize, writeBufSize int) *Conn {
+func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) *Conn {
 	mu := make(chan bool, 1)
 	mu <- true
 
+	if readBufferSize == 0 {
+		readBufferSize = defaultReadBufferSize
+	}
+	if writeBufferSize == 0 {
+		writeBufferSize = defaultWriteBufferSize
+	}
+
 	c := &Conn{
 		isServer:       isServer,
-		br:             bufio.NewReaderSize(conn, readBufSize),
+		br:             bufio.NewReaderSize(conn, readBufferSize),
 		conn:           conn,
 		mu:             mu,
 		readFinal:      true,
-		writeBuf:       make([]byte, writeBufSize+maxFrameHeaderSize),
+		writeBuf:       make([]byte, writeBufferSize+maxFrameHeaderSize),
 		writeFrameType: noFrame,
 		writePos:       maxFrameHeaderSize,
 	}
