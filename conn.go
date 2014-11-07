@@ -108,7 +108,7 @@ var (
 
 func hideTempErr(err error) error {
 	if e, ok := err.(net.Error); ok && e.Temporary() {
-		err = struct{ error }{err}
+		err = &netError{msg: e.Error(), timeout: e.Timeout()}
 	}
 	return err
 }
