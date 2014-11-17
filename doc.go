@@ -97,10 +97,13 @@
 //
 // Concurrency
 //
-// A Conn supports a single concurrent caller to the write methods (NextWriter,
-// SetWriteDeadline, WriteMessage) and a single concurrent caller to the read
-// methods (NextReader, SetReadDeadline, ReadMessage). The Close and
-// WriteControl methods can be called concurrently with all other methods.
+// Connections do not support concurrent calls to the write methods
+// (NextWriter, SetWriteDeadline, WriteMessage) or concurrent calls to the read
+// methods methods (NextReader, SetReadDeadline, ReadMessage).  Connections do
+// support a concurrent reader and writer.
+//
+// The Close and WriteControl methods can be called concurrently with all other
+// methods.
 //
 // Read is Required
 //
@@ -117,4 +120,29 @@
 //          }
 //      }
 //  }
+//
+// Origin Considerations
+//
+// Web browsers allow Javascript applications to open a WebSocket connection to
+// any host. It's up to the server to enforce an origin policy using the Origin
+// request header sent by the browser.
+//
+// The Upgrader calls the function specified in the CheckOrigin field to check
+// the origin. If the CheckOrigin function returns false, then the Upgrade
+// method fails the WebSocket handshake with HTTP status 403.
+//
+// If the CheckOrigin field is nil, then the Upgrader uses a safe default: fail
+// the handshake if the Origin request header is present and not equal to the
+// Host request header.
+//
+// An application can allow connections from any origin by specifying a
+// function that always returns true:
+//
+//    var upgrader = websocket.Upgrader{
+//      CheckOrigin: func(r *http.Request) bool { return true },
+//   }
+//
+// The deprecated Upgrade function does not enforce an origin policy. It's the
+// application's responsibility to check the Origin header before calling
+// Upgrade.
 package websocket

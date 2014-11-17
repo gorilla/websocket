@@ -152,7 +152,7 @@ func TestCloseBeforeFinalFrame(t *testing.T) {
 
 	w, _ := wc.NextWriter(BinaryMessage)
 	w.Write(make([]byte, bufSize+bufSize/2))
-	wc.WriteControl(CloseMessage, []byte{}, time.Now().Add(10*time.Second))
+	wc.WriteControl(CloseMessage, FormatCloseMessage(CloseNormalClosure, ""), time.Now().Add(10*time.Second))
 	w.Close()
 
 	op, r, err := rc.NextReader()
@@ -160,8 +160,8 @@ func TestCloseBeforeFinalFrame(t *testing.T) {
 		t.Fatalf("NextReader() returned %d, %v", op, err)
 	}
 	_, err = io.Copy(ioutil.Discard, r)
-	if err != io.ErrUnexpectedEOF {
-		t.Fatalf("io.Copy() returned %v, want %v", err, io.ErrUnexpectedEOF)
+	if err != errUnexpectedEOF {
+		t.Fatalf("io.Copy() returned %v, want %v", err, errUnexpectedEOF)
 	}
 	_, _, err = rc.NextReader()
 	if err != io.EOF {
@@ -184,12 +184,12 @@ func TestEOFBeforeFinalFrame(t *testing.T) {
 		t.Fatalf("NextReader() returned %d, %v", op, err)
 	}
 	_, err = io.Copy(ioutil.Discard, r)
-	if err != io.ErrUnexpectedEOF {
-		t.Fatalf("io.Copy() returned %v, want %v", err, io.ErrUnexpectedEOF)
+	if err != errUnexpectedEOF {
+		t.Fatalf("io.Copy() returned %v, want %v", err, errUnexpectedEOF)
 	}
 	_, _, err = rc.NextReader()
-	if err != io.ErrUnexpectedEOF {
-		t.Fatalf("NextReader() returned %v, want %v", err, io.ErrUnexpectedEOF)
+	if err != errUnexpectedEOF {
+		t.Fatalf("NextReader() returned %v, want %v", err, errUnexpectedEOF)
 	}
 }
 
