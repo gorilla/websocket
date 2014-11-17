@@ -9,22 +9,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"io"
-	"net/http"
-	"strings"
 )
-
-// tokenListContainsValue returns true if the 1#token header with the given
-// name contains token.
-func tokenListContainsValue(header http.Header, name string, value string) bool {
-	for _, v := range header[name] {
-		for _, s := range strings.Split(v, ",") {
-			if strings.EqualFold(value, strings.TrimSpace(s)) {
-				return true
-			}
-		}
-	}
-	return false
-}
 
 var keyGUID = []byte("258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
 
