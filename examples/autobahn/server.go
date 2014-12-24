@@ -147,7 +147,7 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	io.WriteString(w, "<html><body>Echo Server</body></html")
+	io.WriteString(w, "<html><body>Echo Server</body></html>")
 }
 
 var addr = flag.String("addr", ":9000", "http service address")
