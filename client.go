@@ -228,6 +228,22 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		requestHeader = h
 	}
 
+	if len(requestHeader["Host"]) > 0 {
+		// This can be used to supply a Host: header which is different from
+		// the dial address.
+		u.Host = requestHeader.Get("Host")
+
+		// Drop "Host" header
+		h := http.Header{}
+		for k, v := range requestHeader {
+			if k == "Host" {
+				continue
+			}
+			h[k] = v
+		}
+		requestHeader = h
+	}
+
 	conn, resp, err := NewClient(netConn, u, requestHeader, d.ReadBufferSize, d.WriteBufferSize)
 
 	if err != nil {

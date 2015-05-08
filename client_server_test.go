@@ -288,3 +288,36 @@ func TestRespOnBadHandshake(t *testing.T) {
 		t.Errorf("resp.Body=%s, want %s", p, expectedBody)
 	}
 }
+
+// If the Host header is specified in `Dial()`, the server must receive it as
+// the `Host:` header.
+func TestHostHeader(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	specifiedHost := make(chan string, 1)
+	origHandler := s.Server.Config.Handler
+
+	// Capture the request Host header.
+	s.Server.Config.Handler = http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			specifiedHost <- r.Host
+			origHandler.ServeHTTP(w, r)
+		})
+
+	ws, resp, err := cstDialer.Dial(s.URL, http.Header{"Host": {"testhost"}})
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer ws.Close()
+
+	if resp.StatusCode != http.StatusSwitchingProtocols {
+		t.Fatalf("resp.StatusCode = %v, want http.StatusSwitchingProtocols", resp.StatusCode)
+	}
+
+	if gotHost := <-specifiedHost; gotHost != "testhost" {
+		t.Fatalf("gotHost = %q, want \"testhost\"", gotHost)
+	}
+
+	sendRecv(t, ws)
+}
