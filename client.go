@@ -130,6 +130,11 @@ func parseURL(s string) (*url.URL, error) {
 		u.Opaque = s[i:]
 	}
 
+	if strings.Contains(u.Host, "@") {
+		// WebSocket URIs do not contain user information.
+		return nil, errMalformedURL
+	}
+
 	return &u, nil
 }
 
