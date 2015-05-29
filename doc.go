@@ -24,7 +24,7 @@
 //      ... Use conn to send and receive messages.
 //  }
 //
-// Call the connection WriteMessage and ReadMessages methods to send and
+// Call the connection's WriteMessage and ReadMessage methods to send and
 // receive messages as a slice of bytes. This snippet of code shows how to echo
 // messages using these methods:
 //
