@@ -789,6 +789,7 @@ func (c *Conn) SetReadLimit(limit int64) {
 }
 
 // SetPingHandler sets the handler for ping messages received from the peer.
+// It's argument is the payload or "Application data" of that very message.
 // The default ping handler sends a pong to the peer.
 func (c *Conn) SetPingHandler(h func(string) error) {
 	if h == nil {
@@ -801,6 +802,7 @@ func (c *Conn) SetPingHandler(h func(string) error) {
 }
 
 // SetPongHandler sets the handler for pong messages received from the peer.
+// It's argument is the payload or "Application data" of that very message.
 // The default pong handler does nothing.
 func (c *Conn) SetPongHandler(h func(string) error) {
 	if h == nil {
