@@ -789,8 +789,9 @@ func (c *Conn) SetReadLimit(limit int64) {
 }
 
 // SetPingHandler sets the handler for ping messages received from the peer.
-// The default ping handler sends a pong to the peer.
-func (c *Conn) SetPingHandler(h func(string) error) {
+// The appData argument to h is the PING frame application data. The default
+// ping handler sends a pong to the peer.
+func (c *Conn) SetPingHandler(h func(appData string) error) {
 	if h == nil {
 		h = func(message string) error {
 			c.WriteControl(PongMessage, []byte(message), time.Now().Add(writeWait))
@@ -801,8 +802,9 @@ func (c *Conn) SetPingHandler(h func(string) error) {
 }
 
 // SetPongHandler sets the handler for pong messages received from the peer.
-// The default pong handler does nothing.
-func (c *Conn) SetPongHandler(h func(string) error) {
+// The appData argument to h is the PONG frame application data. The default
+// pong handler does nothing.
+func (c *Conn) SetPongHandler(h func(appData string) error) {
 	if h == nil {
 		h = func(string) error { return nil }
 	}
