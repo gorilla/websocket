@@ -155,7 +155,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		p = append(p, "\r\n"...)
 	}
 	for k, vs := range responseHeader {
-		if k == "Sec-Websocket-Protocol" {
+		if k == "Upgrade" || k == "Connection" || k == "Sec-Websocket-Accept" || k == "Sec-Websocket-Protocol" {
 			continue
 		}
 		for _, v := range vs {
