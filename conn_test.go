@@ -5,6 +5,7 @@
 package websocket
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -237,5 +238,35 @@ func TestUnderlyingConn(t *testing.T) {
 	ul := c.UnderlyingConn()
 	if ul != fc {
 		t.Fatalf("Underlying conn is not what it should be.")
+	}
+}
+
+func TestBufioReadBytes(t *testing.T) {
+
+	// Test calling bufio.ReadBytes for value longer than read buffer size.
+
+	m := make([]byte, 512)
+	m[len(m)-1] = '\n'
+
+	var b1, b2 bytes.Buffer
+	wc := newConn(fakeNetConn{Reader: nil, Writer: &b1}, false, len(m)+64, len(m)+64)
+	rc := newConn(fakeNetConn{Reader: &b1, Writer: &b2}, true, len(m)-64, len(m)-64)
+
+	w, _ := wc.NextWriter(BinaryMessage)
+	w.Write(m)
+	w.Close()
+
+	op, r, err := rc.NextReader()
+	if op != BinaryMessage || err != nil {
+		t.Fatalf("NextReader() returned %d, %v", op, err)
+	}
+
+	br := bufio.NewReader(r)
+	p, err := br.ReadBytes('\n')
+	if err != nil {
+		t.Fatalf("ReadBytes() returned %v", err)
+	}
+	if len(p) != len(m) {
+		t.Fatalf("read returnd %d bytes, want %d bytes", len(p), len(m))
 	}
 }
