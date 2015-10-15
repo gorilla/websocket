@@ -103,7 +103,7 @@ func (e *CloseError) Error() string {
 }
 
 var (
-	errWriteTimeout        = &netError{msg: "websocket: write timeout", timeout: true}
+	errWriteTimeout        = &netError{msg: "websocket: write timeout", timeout: true, temporary: true}
 	errUnexpectedEOF       = &CloseError{Code: CloseAbnormalClosure, Text: io.ErrUnexpectedEOF.Error()}
 	errBadWriteOpCode      = errors.New("websocket: bad write message type")
 	errWriteClosed         = errors.New("websocket: write closed")
@@ -300,7 +300,7 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 	if n != 0 && n != len(buf) {
 		c.conn.Close()
 	}
-	return err
+	return hideTempErr(err)
 }
 
 // NextWriter returns a writer for the next message to send.  The writer's
@@ -794,8 +794,13 @@ func (c *Conn) SetReadLimit(limit int64) {
 func (c *Conn) SetPingHandler(h func(appData string) error) {
 	if h == nil {
 		h = func(message string) error {
-			c.WriteControl(PongMessage, []byte(message), time.Now().Add(writeWait))
-			return nil
+			err := c.WriteControl(PongMessage, []byte(message), time.Now().Add(writeWait))
+			if err == ErrCloseSent {
+				return nil
+			} else if e, ok := err.(net.Error); ok && e.Temporary() {
+				return nil
+			}
+			return err
 		}
 	}
 	c.handlePing = h
