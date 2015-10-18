@@ -17,8 +17,6 @@ import (
 
 var addr = flag.String("addr", "localhost:8081", "http service address")
 
-var dialer = websocket.Dialer{} // use default options
-
 func main() {
 	flag.Parse()
 	log.SetFlags(0)
@@ -26,7 +24,7 @@ func main() {
 	u := url.URL{Scheme: "ws", Host: *addr, Path: "/"}
 	log.Printf("connecting to %s", u.String())
 
-	c, _, err := dialer.Dial(u.String(), nil)
+	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
 		log.Fatal("dial:", err)
 	}
