@@ -37,7 +37,7 @@
             appendLog($("<div><b>Connection closed.</b></div>"))
         }
         conn.onmessage = function(evt) {
-            appendLog($("<div/>").text(evt.data))
+            appendLog($("<pre/>").text(evt.data))
         }
     } else {
         appendLog($("<div><b>Your browser does not support WebSockets.</b></div>"))
@@ -68,6 +68,10 @@ body {
     right: 0.5em;
     bottom: 3em;
     overflow: auto;
+}
+
+#log pre {
+  margin: 0;
 }
 
 #form {
