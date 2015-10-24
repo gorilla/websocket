@@ -4,6 +4,10 @@
 
 package main
 
+import (
+	"log"
+)
+
 // hub maintains the set of active connections and broadcasts messages to the
 // connections.
 type hub struct {
@@ -31,7 +35,15 @@ func (h *hub) run() {
 	for {
 		select {
 		case c := <-h.register:
-			h.connections[c] = true
+
+			// start up a single reader/writer for each connection
+			if _, ok := h.connections[c]; !ok {
+				h.connections[c] = true
+
+				c.startPumps()
+
+			}
+
 		case c := <-h.unregister:
 			if _, ok := h.connections[c]; ok {
 				delete(h.connections, c)
@@ -41,9 +53,9 @@ func (h *hub) run() {
 			for c := range h.connections {
 				select {
 				case c.send <- m:
+					log.Printf("hub sending message:msg:%s:", string(m))
 				default:
-					close(c.send)
-					delete(h.connections, c)
+					log.Printf("hub got an unknown message")
 				}
 			}
 		}

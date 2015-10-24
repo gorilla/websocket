@@ -24,14 +24,23 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	homeTempl.Execute(w, r.Host)
+
+	homeTempl.Execute(w, struct {
+		BcPrefix string
+		Hostname string
+	}{BcPrefix: BcPrefix, Hostname: r.Host})
 }
 
 func main() {
+
 	flag.Parse()
+
 	go h.run()
+
 	http.HandleFunc("/", serveHome)
+
 	http.HandleFunc("/ws", serveWs)
+
 	err := http.ListenAndServe(*addr, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
