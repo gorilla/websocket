@@ -123,6 +123,45 @@ func sendRecv(t *testing.T, ws *Conn) {
 	}
 }
 
+func TestProxyDial(t *testing.T) {
+
+	s := newServer(t)
+	defer s.Close()
+
+	surl, _ := url.Parse(s.URL)
+
+	cstDialer.Proxy = http.ProxyURL(surl)
+
+	connect := false
+	origHandler := s.Server.Config.Handler
+
+	// Capture the request Host header.
+	s.Server.Config.Handler = http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "CONNECT" {
+				connect = true
+				w.WriteHeader(200)
+				return
+			}
+
+			if !connect {
+				t.Log("connect not recieved")
+				http.Error(w, "connect not recieved", 405)
+				return
+			}
+			origHandler.ServeHTTP(w, r)
+		})
+
+	ws, _, err := cstDialer.Dial(s.URL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer ws.Close()
+	sendRecv(t, ws)
+
+	cstDialer.Proxy = http.ProxyFromEnvironment
+}
+
 func TestDial(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()

@@ -5,6 +5,7 @@
 package websocket
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/tls"
 	"errors"
@@ -48,6 +49,12 @@ type Dialer struct {
 	// NetDial specifies the dial function for creating TCP connections. If
 	// NetDial is nil, net.Dial is used.
 	NetDial func(network, addr string) (net.Conn, error)
+
+	// Proxy specifies a function to return a proxy for a given
+	// Request. If the function returns a non-nil error, the
+	// request is aborted with the provided error.
+	// If Proxy is nil or returns a nil *URL, no proxy is used.
+	Proxy func(*http.Request) (*url.URL, error)
 
 	// TLSClientConfig specifies the TLS configuration to use with tls.Client.
 	// If nil, the default configuration is used.
@@ -110,9 +117,12 @@ func hostPortNoPort(u *url.URL) (hostPort, hostNoPort string) {
 	if i := strings.LastIndex(u.Host, ":"); i > strings.LastIndex(u.Host, "]") {
 		hostNoPort = hostNoPort[:i]
 	} else {
-		if u.Scheme == "wss" {
+		switch u.Scheme {
+		case "wss":
 			hostPort += ":443"
-		} else {
+		case "https":
+			hostPort += ":443"
+		default:
 			hostPort += ":80"
 		}
 	}
@@ -120,7 +130,9 @@ func hostPortNoPort(u *url.URL) (hostPort, hostNoPort string) {
 }
 
 // DefaultDialer is a dialer with all fields set to the default zero values.
-var DefaultDialer = &Dialer{}
+var DefaultDialer = &Dialer{
+	Proxy: http.ProxyFromEnvironment,
+}
 
 // Dial creates a new client connection. Use requestHeader to specify the
 // origin (Origin), subprotocols (Sec-WebSocket-Protocol) and cookies (Cookie).
@@ -134,7 +146,9 @@ var DefaultDialer = &Dialer{}
 func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Response, error) {
 
 	if d == nil {
-		d = &Dialer{}
+		d = &Dialer{
+			Proxy: http.ProxyFromEnvironment,
+		}
 	}
 
 	challengeKey, err := generateChallengeKey()
@@ -194,6 +208,22 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 
 	hostPort, hostNoPort := hostPortNoPort(u)
 
+	var proxyURL *url.URL
+	// Check wether the proxy method has been configured
+	if d.Proxy != nil {
+		proxyURL, err = d.Proxy(req)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var targetHostPort string
+	if proxyURL != nil {
+		targetHostPort, _ = hostPortNoPort(proxyURL)
+	} else {
+		targetHostPort = hostPort
+	}
+
 	var deadline time.Time
 	if d.HandshakeTimeout != 0 {
 		deadline = time.Now().Add(d.HandshakeTimeout)
@@ -205,7 +235,7 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		netDial = netDialer.Dial
 	}
 
-	netConn, err := netDial("tcp", hostPort)
+	netConn, err := netDial("tcp", targetHostPort)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -218,6 +248,30 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 
 	if err := netConn.SetDeadline(deadline); err != nil {
 		return nil, nil, err
+	}
+
+	if proxyURL != nil {
+		connectReq := &http.Request{
+			Method: "CONNECT",
+			URL:    &url.URL{Opaque: hostPort},
+			Host:   hostPort,
+			Header: make(http.Header),
+		}
+
+		connectReq.Write(netConn)
+
+		// Read response.
+		// Okay to use and discard buffered reader here, because
+		// TLS server will not speak until spoken to.
+		br := bufio.NewReader(netConn)
+		resp, err := http.ReadResponse(br, connectReq)
+		if err != nil {
+			return nil, nil, err
+		}
+		if resp.StatusCode != 200 {
+			f := strings.SplitN(resp.Status, " ", 2)
+			return nil, nil, errors.New(f[1])
+		}
 	}
 
 	if u.Scheme == "https" {
