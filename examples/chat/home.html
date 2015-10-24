@@ -26,13 +26,14 @@
         if (!msg.val()) {
             return false;
         }
-        conn.send(msg.val());
+
+        conn.send( JSON.stringify({ chan: "{{ .BcPrefix }}", msg: msg.val() }) );
         msg.val("");
         return false
     });
 
     if (window["WebSocket"]) {
-        conn = new WebSocket("ws://{{$}}/ws");
+        conn = new WebSocket("ws://{{ .Hostname }}/ws");
         conn.onclose = function(evt) {
             appendLog($("<div><b>Connection closed.</b></div>"))
         }
