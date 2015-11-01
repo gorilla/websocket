@@ -16,7 +16,11 @@ import (
 
 var addr = flag.String("addr", "localhost:8081", "http service address")
 
-var upgrader = websocket.Upgrader{} // use default options
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+        return true
+    },
+} // use default options, except origin. Allows cross-origin requests for testing.
 
 func echo(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
