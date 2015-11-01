@@ -20,7 +20,8 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
         return true
     },
-} // use default options, except origin. Allows cross-origin requests for testing.
+} /* use default options, except origin. Allows cross-origin requests for testing. 
+Presents a security risk if run in production */
 
 func echo(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
