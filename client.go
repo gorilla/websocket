@@ -316,10 +316,9 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		n, _ := io.ReadFull(resp.Body, buf)
 		resp.Body = ioutil.NopCloser(bytes.NewReader(buf[:n]))
 		return nil, resp, ErrBadHandshake
-	} else {
-		resp.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
 	}
 
+	resp.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
 	conn.subprotocol = resp.Header.Get("Sec-Websocket-Protocol")
 
 	netConn.SetDeadline(time.Time{})
