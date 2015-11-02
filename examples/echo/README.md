@@ -14,6 +14,4 @@ Next, start the client:
     $ go run client.go
 
 The server includes a simple web client. To use the client, open
-http://127.0.0.1:8080 in the browser. Click "Open" to open a connection to the
-server, "Send" to send a message to the server and "Close" to close the
-connection.
+http://127.0.0.1:8080 in the browser and follow the instructions on the page.
