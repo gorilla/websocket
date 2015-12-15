@@ -13,14 +13,19 @@ import (
 	"strings"
 )
 
-// tokenListContainsValue returns true if the 1#token header with the given
+// headerListContainsValue returns true if the 1#token header with the given
 // name contains token.
-func tokenListContainsValue(header http.Header, name string, value string) bool {
+func headerListContainsValue(header http.Header, name string, value string) bool {
 	for _, v := range header[name] {
-		for _, s := range strings.Split(v, ",") {
-			if strings.EqualFold(value, strings.TrimSpace(s)) {
-				return true
-			}
+		return tokenListContainsValue(v, value)
+	}
+	return false
+}
+
+func tokenListContainsValue(list string, value string) bool {
+	for _, s := range strings.Split(list, ",") {
+		if strings.EqualFold(value, strings.TrimSpace(s)) {
+			return true
 		}
 	}
 	return false
@@ -29,8 +34,12 @@ func tokenListContainsValue(header http.Header, name string, value string) bool 
 var keyGUID = []byte("258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
 
 func computeAcceptKey(challengeKey string) string {
+	return computeAcceptKeyByte([]byte(challengeKey))
+}
+
+func computeAcceptKeyByte(challengeKey []byte) string {
 	h := sha1.New()
-	h.Write([]byte(challengeKey))
+	h.Write(challengeKey)
 	h.Write(keyGUID)
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }

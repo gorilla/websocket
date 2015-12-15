@@ -14,6 +14,12 @@ import (
 	"time"
 )
 
+const (
+	originHeader     = "Origin"
+	protocolHeader   = "Sec-Websocket-Protocol"
+	websocketVersion = "13"
+)
+
 // HandshakeError describes an error with the handshake from the peer.
 type HandshakeError struct {
 	message string
@@ -60,30 +66,42 @@ func (u *Upgrader) returnError(w http.ResponseWriter, r *http.Request, status in
 
 // checkSameOrigin returns true if the origin is not set or is equal to the request host.
 func checkSameOrigin(r *http.Request) bool {
-	origin := r.Header["Origin"]
+	origin := r.Header[originHeader]
 	if len(origin) == 0 {
 		return true
 	}
-	u, err := url.Parse(origin[0])
+	return checkSameOriginFromHeaderAndHost(origin[0], r.Host)
+}
+
+func checkSameOriginFromHeaderAndHost(origin, reqHost string) bool {
+	if len(origin) == 0 {
+		return true
+	}
+	u, err := url.Parse(origin)
 	if err != nil {
 		return false
 	}
-	return u.Host == r.Host
+	return u.Host == reqHost
 }
 
 func (u *Upgrader) selectSubprotocol(r *http.Request, responseHeader http.Header) string {
 	if u.Subprotocols != nil {
-		clientProtocols := Subprotocols(r)
-		for _, serverProtocol := range u.Subprotocols {
-			for _, clientProtocol := range clientProtocols {
-				if clientProtocol == serverProtocol {
-					return clientProtocol
-				}
+		return matchSubprotocol(Subprotocols(r), u.Subprotocols)
+	} else if responseHeader != nil {
+		return responseHeader.Get(protocolHeader)
+	}
+	return ""
+}
+
+func matchSubprotocol(clientProtocols, serverProtocols []string) string {
+	for _, serverProtocol := range serverProtocols {
+		for _, clientProtocol := range clientProtocols {
+			if clientProtocol == serverProtocol {
+				return clientProtocol
 			}
 		}
-	} else if responseHeader != nil {
-		return responseHeader.Get("Sec-Websocket-Protocol")
 	}
+
 	return ""
 }
 
@@ -96,15 +114,15 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	if r.Method != "GET" {
 		return u.returnError(w, r, http.StatusMethodNotAllowed, "websocket: method not GET")
 	}
-	if values := r.Header["Sec-Websocket-Version"]; len(values) == 0 || values[0] != "13" {
-		return u.returnError(w, r, http.StatusBadRequest, "websocket: version != 13")
+	if values := r.Header["Sec-Websocket-Version"]; len(values) == 0 || values[0] != websocketVersion {
+		return u.returnError(w, r, http.StatusBadRequest, "websocket: version !="+websocketVersion)
 	}
 
-	if !tokenListContainsValue(r.Header, "Connection", "upgrade") {
+	if !headerListContainsValue(r.Header, "Connection", "upgrade") {
 		return u.returnError(w, r, http.StatusBadRequest, "websocket: could not find connection header with token 'upgrade'")
 	}
 
-	if !tokenListContainsValue(r.Header, "Upgrade", "websocket") {
+	if !headerListContainsValue(r.Header, "Upgrade", "websocket") {
 		return u.returnError(w, r, http.StatusBadRequest, "websocket: could not find upgrade header with token 'websocket'")
 	}
 
@@ -158,7 +176,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		p = append(p, "\r\n"...)
 	}
 	for k, vs := range responseHeader {
-		if k == "Sec-Websocket-Protocol" {
+		if k == protocolHeader {
 			continue
 		}
 		for _, v := range vs {
@@ -238,7 +256,11 @@ func Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header,
 // Subprotocols returns the subprotocols requested by the client in the
 // Sec-Websocket-Protocol header.
 func Subprotocols(r *http.Request) []string {
-	h := strings.TrimSpace(r.Header.Get("Sec-Websocket-Protocol"))
+	return subprotocolsFromHeader(r.Header.Get(protocolHeader))
+}
+
+func subprotocolsFromHeader(header string) []string {
+	h := strings.TrimSpace(header)
 	if h == "" {
 		return nil
 	}
