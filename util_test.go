@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-var tokenListContainsValueTests = []struct {
+var headerListContainsValueTests = []struct {
 	value string
 	ok    bool
 }{
@@ -23,12 +23,12 @@ var tokenListContainsValueTests = []struct {
 	{"other, websocket, more", true},
 }
 
-func TestTokenListContainsValue(t *testing.T) {
-	for _, tt := range tokenListContainsValueTests {
+func TestHeaderListContainsValue(t *testing.T) {
+	for _, tt := range headerListContainsValueTests {
 		h := http.Header{"Upgrade": {tt.value}}
-		ok := tokenListContainsValue(h, "Upgrade", "websocket")
+		ok := headerListContainsValue(h, "Upgrade", "websocket")
 		if ok != tt.ok {
-			t.Errorf("tokenListContainsValue(h, n, %q) = %v, want %v", tt.value, ok, tt.ok)
+			t.Errorf("headerListContainsValue(h, n, %q) = %v, want %v", tt.value, ok, tt.ok)
 		}
 	}
 }
