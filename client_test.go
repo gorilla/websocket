@@ -21,6 +21,8 @@ var parseURLTests = []struct {
 	{"wss://example.com/a/b", &url.URL{Scheme: "wss", Host: "example.com", Opaque: "/a/b"}},
 	{"ss://example.com/a/b", nil},
 	{"ws://webmaster@example.com/", nil},
+	{"ws://example.com/a/b?param1=a&param2=b", &url.URL{Scheme: "ws", Host: "example.com", Opaque: "/a/b", RawQuery: "param1=a&param2=b"}},
+	{"ws://example.com:7777?param1=a&param2=b", &url.URL{Scheme: "ws", Host: "example.com:7777", Opaque: "/", RawQuery: "param1=a&param2=b"}},
 }
 
 func TestParseURL(t *testing.T) {

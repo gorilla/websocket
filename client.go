@@ -95,11 +95,19 @@ func parseURL(s string) (*url.URL, error) {
 		return nil, errMalformedURL
 	}
 
-	u.Host = s
+	if i := strings.Index(s, "?"); i >= 0 {
+		u.Host, u.RawQuery = s[:i], s[i+1:]
+	} else {
+		u.Host = s
+	}
+
 	u.Opaque = "/"
 	if i := strings.Index(s, "/"); i >= 0 {
 		u.Host = s[:i]
 		u.Opaque = s[i:]
+	}
+	if i := strings.Index(u.Opaque, "?"); i >= 0 {
+		u.Opaque = u.Opaque[:i]
 	}
 
 	if strings.Contains(u.Host, "@") {
