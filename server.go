@@ -96,7 +96,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	if r.Method != "GET" {
 		return u.returnError(w, r, http.StatusMethodNotAllowed, "websocket: method not GET")
 	}
-	if values := r.Header["Sec-Websocket-Version"]; len(values) == 0 || values[0] != "13" {
+	if values := r.Header.Get("Sec-Websocket-Version"); len(values) == 0 || values != "13" {
 		return u.returnError(w, r, http.StatusBadRequest, "websocket: version != 13")
 	}
 
