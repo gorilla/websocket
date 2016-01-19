@@ -291,3 +291,23 @@ func TestCloseError(t *testing.T) {
 		}
 	}
 }
+
+var unexpectedCloseErrorTests = []struct {
+	err   error
+	codes []int
+	ok    bool
+}{
+	{&CloseError{Code: CloseNormalClosure}, []int{CloseNormalClosure}, false},
+	{&CloseError{Code: CloseNormalClosure}, []int{CloseNoStatusReceived}, true},
+	{&CloseError{Code: CloseNormalClosure}, []int{CloseNoStatusReceived, CloseNormalClosure}, false},
+	{errors.New("hello"), []int{CloseNormalClosure}, false},
+}
+
+func TestUnexpectedCloseErrors(t *testing.T) {
+	for _, tt := range unexpectedCloseErrorTests {
+		ok := IsUnexpectedCloseError(tt.err, tt.codes...)
+		if ok != tt.ok {
+			t.Errorf("IsUnexpectedCloseError(%#v, %#v) returned %v, want %v", tt.err, tt.codes, ok, tt.ok)
+		}
+	}
+}

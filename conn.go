@@ -115,6 +115,20 @@ func IsCloseError(err error, codes ...int) bool {
 	return false
 }
 
+// IsUnexpectedCloseError returns boolean indicating whether the error is a
+// *CloseError with a code not in the list of expected codes.
+func IsUnexpectedCloseError(err error, expectedCodes ...int) bool {
+	if e, ok := err.(*CloseError); ok {
+		for _, code := range expectedCodes {
+			if e.Code == code {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
 var (
 	errWriteTimeout        = &netError{msg: "websocket: write timeout", timeout: true, temporary: true}
 	errUnexpectedEOF       = &CloseError{Code: CloseAbnormalClosure, Text: io.ErrUnexpectedEOF.Error()}
@@ -321,9 +335,6 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 //
 // There can be at most one open writer on a connection. NextWriter closes the
 // previous writer if the application has not already done so.
-//
-// The NextWriter method and the writers returned from the method cannot be
-// accessed by more than one goroutine at a time.
 func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
 	if c.writeErr != nil {
 		return nil, c.writeErr
@@ -708,7 +719,8 @@ func (c *Conn) handleProtocolError(message string) error {
 // the previous message if the application has not already consumed it.
 //
 // Errors returned from NextReader are permanent. If NextReader returns a
-// non-nil error, then all subsequent calls to NextReader will the same error.
+// non-nil error, then all subsequent calls to NextReader return the same
+// error.
 func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 
 	c.readSeq++
