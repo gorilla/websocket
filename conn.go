@@ -102,6 +102,19 @@ func (e *CloseError) Error() string {
 	return "websocket: close " + strconv.Itoa(e.Code) + " " + e.Text
 }
 
+// IsCloseError returns boolean indicating whether the error is a *CloseError
+// with one of the specified codes.
+func IsCloseError(err error, codes ...int) bool {
+	if e, ok := err.(*CloseError); ok {
+		for _, code := range codes {
+			if e.Code == code {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 var (
 	errWriteTimeout        = &netError{msg: "websocket: write timeout", timeout: true, temporary: true}
 	errUnexpectedEOF       = &CloseError{Code: CloseAbnormalClosure, Text: io.ErrUnexpectedEOF.Error()}
@@ -694,8 +707,8 @@ func (c *Conn) handleProtocolError(message string) error {
 // There can be at most one open reader on a connection. NextReader discards
 // the previous message if the application has not already consumed it.
 //
-// The NextReader method and the readers returned from the method cannot be
-// accessed by more than one goroutine at a time.
+// Errors returned from NextReader are permanent. If NextReader returns a
+// non-nil error, then all subsequent calls to NextReader will the same error.
 func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 
 	c.readSeq++

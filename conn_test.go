@@ -7,6 +7,7 @@ package websocket
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -268,5 +269,25 @@ func TestBufioReadBytes(t *testing.T) {
 	}
 	if len(p) != len(m) {
 		t.Fatalf("read returnd %d bytes, want %d bytes", len(p), len(m))
+	}
+}
+
+var closeErrorTests = []struct {
+	err   error
+	codes []int
+	ok    bool
+}{
+	{&CloseError{Code: CloseNormalClosure}, []int{CloseNormalClosure}, true},
+	{&CloseError{Code: CloseNormalClosure}, []int{CloseNoStatusReceived}, false},
+	{&CloseError{Code: CloseNormalClosure}, []int{CloseNoStatusReceived, CloseNormalClosure}, true},
+	{errors.New("hello"), []int{CloseNormalClosure}, false},
+}
+
+func TestCloseError(t *testing.T) {
+	for _, tt := range closeErrorTests {
+		ok := IsCloseError(tt.err, tt.codes...)
+		if ok != tt.ok {
+			t.Errorf("IsCloseError(%#v, %#v) returned %v, want %v", tt.err, tt.codes, ok, tt.ok)
+		}
 	}
 }
