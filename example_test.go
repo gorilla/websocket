@@ -25,7 +25,7 @@ func ExampleIsUnexpectedCloseError(err error, c *websocket.Conn, req *http.Reque
 		messageType, p, err := c.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
-				log.Println("error: %v, user-agent: %v", err, req.Header.Get("User-Agent"))
+				log.Printf("error: %v, user-agent: %v", err, req.Header.Get("User-Agent"))
 			}
 			return
 		}
