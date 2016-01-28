@@ -99,7 +99,39 @@ type CloseError struct {
 }
 
 func (e *CloseError) Error() string {
-	return "websocket: close " + strconv.Itoa(e.Code) + " " + e.Text
+	s := []byte("websocket: close ")
+	s = strconv.AppendInt(s, int64(e.Code), 10)
+	switch e.Code {
+	case CloseNormalClosure:
+		s = append(s, " (normal)"...)
+	case CloseGoingAway:
+		s = append(s, " (going away)"...)
+	case CloseProtocolError:
+		s = append(s, " (protocol error)"...)
+	case CloseUnsupportedData:
+		s = append(s, " (unsupported data)"...)
+	case CloseNoStatusReceived:
+		s = append(s, " (no status)"...)
+	case CloseAbnormalClosure:
+		s = append(s, " (abnormal closure)"...)
+	case CloseInvalidFramePayloadData:
+		s = append(s, " (invalid payload data)"...)
+	case ClosePolicyViolation:
+		s = append(s, " (policy violation)"...)
+	case CloseMessageTooBig:
+		s = append(s, " (message too big)"...)
+	case CloseMandatoryExtension:
+		s = append(s, " (mandatory extension missing)"...)
+	case CloseInternalServerErr:
+		s = append(s, " (internal server error)"...)
+	case CloseTLSHandshake:
+		s = append(s, " (TLS handshake error)"...)
+	}
+	if e.Text != "" {
+		s = append(s, ": "...)
+		s = append(s, e.Text...)
+	}
+	return string(s)
 }
 
 // IsCloseError returns boolean indicating whether the error is a *CloseError
