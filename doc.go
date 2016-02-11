@@ -46,8 +46,7 @@
 // method to get an io.WriteCloser, write the message to the writer and close
 // the writer when done. To receive a message, call the connection NextReader
 // method to get an io.Reader and read until io.EOF is returned. This snippet
-// snippet shows how to echo messages using the NextWriter and NextReader
-// methods:
+// shows how to echo messages using the NextWriter and NextReader methods:
 //
 //  for {
 //      messageType, r, err := conn.NextReader()
@@ -141,9 +140,9 @@
 // An application can allow connections from any origin by specifying a
 // function that always returns true:
 //
-//    var upgrader = websocket.Upgrader{
+//  var upgrader = websocket.Upgrader{
 //      CheckOrigin: func(r *http.Request) bool { return true },
-//   }
+//  }
 //
 // The deprecated Upgrade function does not enforce an origin policy. It's the
 // application's responsibility to check the Origin header before calling
