@@ -311,3 +311,57 @@ func TestUnexpectedCloseErrors(t *testing.T) {
 		}
 	}
 }
+
+type blockingWriter struct {
+	c1, c2 chan struct{}
+}
+
+func (w blockingWriter) Write(p []byte) (int, error) {
+	// Allow main to continue
+	close(w.c1)
+	// Wait for panic in main
+	<-w.c2
+	return len(p), nil
+}
+
+func TestConcurrentWritePanic(t *testing.T) {
+	w := blockingWriter{make(chan struct{}), make(chan struct{})}
+	c := newConn(fakeNetConn{Reader: nil, Writer: w}, false, 1024, 1024)
+	go func() {
+		c.WriteMessage(TextMessage, []byte{})
+	}()
+
+	// wait for goroutine to block in write.
+	<-w.c1
+
+	defer func() {
+		close(w.c2)
+		if v := recover(); v != nil {
+			return
+		}
+	}()
+
+	c.WriteMessage(TextMessage, []byte{})
+	t.Fatal("should not get here")
+}
+
+type failingReader struct{}
+
+func (r failingReader) Read(p []byte) (int, error) {
+	return 0, io.EOF
+}
+
+func TestFailedConnectionReadPanic(t *testing.T) {
+	c := newConn(fakeNetConn{Reader: failingReader{}, Writer: nil}, false, 1024, 1024)
+
+	defer func() {
+		if v := recover(); v != nil {
+			return
+		}
+	}()
+
+	for i := 0; i < 20000; i++ {
+		c.ReadMessage()
+	}
+	t.Fatal("should not get here")
+}

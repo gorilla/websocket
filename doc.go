@@ -85,14 +85,28 @@
 // and pong. Call the connection WriteControl, WriteMessage or NextWriter
 // methods to send a control message to the peer.
 //
-// Connections handle received ping and pong messages by invoking a callback
-// function set with SetPingHandler and SetPongHandler methods. These callback
-// functions can be invoked from the ReadMessage method, the NextReader method
-// or from a call to the data message reader returned from NextReader.
+// Connections handle received ping and pong messages by invoking callback
+// functions set with SetPingHandler and SetPongHandler methods. The default
+// ping handler sends a pong to the client. The callback functions can be
+// invoked from the NextReader, ReadMessage or the message Read method.
 //
-// Connections handle received close messages by returning an error from the
-// ReadMessage method, the NextReader method or from a call to the data message
-// reader returned from NextReader.
+// Connections handle received close messages by sending a close message to the
+// peer and returning a *CloseError from the the NextReader, ReadMessage or the
+// message Read method.
+//
+// The application must read the connection to process ping and close messages
+// sent from the peer. If the application is not otherwise interested in
+// messages from the peer, then the application should start a goroutine to
+// read and discard messages from the peer. A simple example is:
+//
+//  func readLoop(c *websocket.Conn) {
+//      for {
+//          if _, _, err := c.NextReader(); err != nil {
+//              c.Close()
+//              break
+//          }
+//      }
+//  }
 //
 // Concurrency
 //
@@ -106,22 +120,6 @@
 //
 // The Close and WriteControl methods can be called concurrently with all other
 // methods.
-//
-// Read is Required
-//
-// The application must read the connection to process ping and close messages
-// sent from the peer. If the application is not otherwise interested in
-// messages from the peer, then the application should start a goroutine to read
-// and discard messages from the peer. A simple example is:
-//
-//  func readLoop(c *websocket.Conn) {
-//      for {
-//          if _, _, err := c.NextReader(); err != nil {
-//              c.Close()
-//              break
-//          }
-//      }
-//  }
 //
 // Origin Considerations
 //
