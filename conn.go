@@ -726,13 +726,15 @@ func (c *Conn) advanceFrame() (int, error) {
 			return noFrame, err
 		}
 	case CloseMessage:
-		c.WriteControl(CloseMessage, []byte{}, time.Now().Add(writeWait))
+		echoMessage := []byte{}
 		closeCode := CloseNoStatusReceived
 		closeText := ""
 		if len(payload) >= 2 {
+			echoMessage = payload[:2]
 			closeCode = int(binary.BigEndian.Uint16(payload))
 			closeText = string(payload[2:])
 		}
+		c.WriteControl(CloseMessage,  echoMessage, time.Now().Add(writeWait))
 		return noFrame, &CloseError{Code: closeCode, Text: closeText}
 	}
 
