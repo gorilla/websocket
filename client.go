@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -265,11 +266,19 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 	}
 
 	if proxyURL != nil {
+		connectHeader := make(http.Header)
+		if user := proxyURL.User; user != nil {
+			proxyUser := user.Username()
+			if proxyPassword, passwordSet := user.Password(); passwordSet {
+				credential := base64.StdEncoding.EncodeToString([]byte(proxyUser + ":" + proxyPassword))
+				connectHeader.Set("Proxy-Authorization", "Basic "+credential)
+			}
+		}
 		connectReq := &http.Request{
 			Method: "CONNECT",
 			URL:    &url.URL{Opaque: hostPort},
 			Host:   hostPort,
-			Header: make(http.Header),
+			Header: connectHeader,
 		}
 
 		connectReq.Write(netConn)

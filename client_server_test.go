@@ -7,6 +7,7 @@ package websocket
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"io"
 	"io/ioutil"
 	"net"
@@ -160,6 +161,46 @@ func TestProxyDial(t *testing.T) {
 			if !connect {
 				t.Log("connect not recieved")
 				http.Error(w, "connect not recieved", 405)
+				return
+			}
+			origHandler.ServeHTTP(w, r)
+		})
+
+	ws, _, err := cstDialer.Dial(s.URL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer ws.Close()
+	sendRecv(t, ws)
+
+	cstDialer.Proxy = http.ProxyFromEnvironment
+}
+
+func TestProxyAuthorizationDial(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	surl, _ := url.Parse(s.URL)
+	surl.User = url.UserPassword("username", "password")
+	cstDialer.Proxy = http.ProxyURL(surl)
+
+	connect := false
+	origHandler := s.Server.Config.Handler
+
+	// Capture the request Host header.
+	s.Server.Config.Handler = http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			proxyAuth := r.Header.Get("Proxy-Authorization")
+			expectedProxyAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte("username:password"))
+			if r.Method == "CONNECT" && proxyAuth == expectedProxyAuth {
+				connect = true
+				w.WriteHeader(200)
+				return
+			}
+
+			if !connect {
+				t.Log("connect with proxy authorization not recieved")
+				http.Error(w, "connect with proxy authorization not recieved", 405)
 				return
 			}
 			origHandler.ServeHTTP(w, r)
