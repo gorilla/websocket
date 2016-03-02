@@ -17,5 +17,5 @@ install:
 script:
   - go get -t -v ./...
   - diff -u <(echo -n) <(gofmt -d .)
-  - go tool vet .
+  - go vet .
   - go test -v -race ./...
