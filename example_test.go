@@ -12,6 +12,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+var (
+	c   *websocket.Conn
+	req *http.Request
+)
+
 // The websocket.IsUnexpectedCloseError function is useful for identifying
 // application and protocol errors.
 //
@@ -20,7 +25,8 @@ import (
 // only expected close message from the client has the code
 // websocket.CloseGoingAway. All other other close messages are likely the
 // result of an application or protocol error and are logged to aid debugging.
-func ExampleIsUnexpectedCloseError(err error, c *websocket.Conn, req *http.Request) {
+func ExampleIsUnexpectedCloseError() {
+
 	for {
 		messageType, p, err := c.ReadMessage()
 		if err != nil {
