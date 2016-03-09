@@ -31,3 +31,21 @@ func TestSubprotocols(t *testing.T) {
 		}
 	}
 }
+
+var isWebSocketUpgradeTests = []struct {
+	ok bool
+	h  http.Header
+}{
+	{false, http.Header{"Upgrade": {"websocket"}}},
+	{false, http.Header{"Connection": {"upgrade"}}},
+	{true, http.Header{"Connection": {"upgRade"}, "Upgrade": {"WebSocket"}}},
+}
+
+func TestIsWebSocketUpgrade(t *testing.T) {
+	for _, tt := range isWebSocketUpgradeTests {
+		ok := IsWebSocketUpgrade(&http.Request{Header: tt.h})
+		if tt.ok != ok {
+			t.Errorf("IsWebSocketUpgrade(%v) returned %v, want %v", tt.h, ok, tt.ok)
+		}
+	}
+}
