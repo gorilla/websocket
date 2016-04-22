@@ -120,7 +120,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var lastMod time.Time
-	if n, err := strconv.ParseInt(r.FormValue("lastMod"), 16, 64); err != nil {
+	if n, err := strconv.ParseInt(r.FormValue("lastMod"), 16, 64); err == nil {
 		lastMod = time.Unix(0, n)
 	}
 
