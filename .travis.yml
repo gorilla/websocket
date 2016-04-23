@@ -3,7 +3,6 @@ sudo: false
 
 matrix:
   include:
-    - go: 1.3
     - go: 1.4
     - go: 1.5
     - go: 1.6
