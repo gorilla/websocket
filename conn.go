@@ -821,6 +821,9 @@ func (r messageReader) Read(b []byte) (int, error) {
 				r.c.readMaskPos = maskBytes(r.c.readMaskKey, r.c.readMaskPos, b[:n])
 			}
 			r.c.readRemaining -= int64(n)
+			if r.c.readRemaining > 0 && r.c.readErr == io.EOF {
+				r.c.readErr = errUnexpectedEOF
+			}
 			return n, r.c.readErr
 		}
 
