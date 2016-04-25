@@ -175,29 +175,37 @@ func TestCloseBeforeFinalFrame(t *testing.T) {
 }
 
 func TestEOFWithinFrame(t *testing.T) {
-	const bufSize = 512
+	const bufSize = 64
 
-	var b bytes.Buffer
-	wc := newConn(fakeNetConn{Reader: nil, Writer: &b}, false, 1024, 1024)
-	rc := newConn(fakeNetConn{Reader: &b, Writer: nil}, true, 1024, 1024)
+	for n := 0; ; n++ {
+		var b bytes.Buffer
+		wc := newConn(fakeNetConn{Reader: nil, Writer: &b}, false, 1024, 1024)
+		rc := newConn(fakeNetConn{Reader: &b, Writer: nil}, true, 1024, 1024)
 
-	w, _ := wc.NextWriter(BinaryMessage)
-	w.Write(make([]byte, bufSize))
-	w.Close()
+		w, _ := wc.NextWriter(BinaryMessage)
+		w.Write(make([]byte, bufSize))
+		w.Close()
 
-	b.Truncate(bufSize / 2)
+		if n >= b.Len() {
+			break
+		}
+		b.Truncate(n)
 
-	op, r, err := rc.NextReader()
-	if op != BinaryMessage || err != nil {
-		t.Fatalf("NextReader() returned %d, %v", op, err)
-	}
-	_, err = io.Copy(ioutil.Discard, r)
-	if err != errUnexpectedEOF {
-		t.Fatalf("io.Copy() returned %v, want %v", err, errUnexpectedEOF)
-	}
-	_, _, err = rc.NextReader()
-	if err != errUnexpectedEOF {
-		t.Fatalf("NextReader() returned %v, want %v", err, errUnexpectedEOF)
+		op, r, err := rc.NextReader()
+		if err == errUnexpectedEOF {
+			continue
+		}
+		if op != BinaryMessage || err != nil {
+			t.Fatalf("%d: NextReader() returned %d, %v", n, op, err)
+		}
+		_, err = io.Copy(ioutil.Discard, r)
+		if err != errUnexpectedEOF {
+			t.Fatalf("%d: io.Copy() returned %v, want %v", n, err, errUnexpectedEOF)
+		}
+		_, _, err = rc.NextReader()
+		if err != errUnexpectedEOF {
+			t.Fatalf("%d: NextReader() returned %v, want %v", n, err, errUnexpectedEOF)
+		}
 	}
 }
 
