@@ -124,6 +124,9 @@ func (u *Upgrader) selectCompressionExtension(r *http.Request) (string, bool, er
 // The responseHeader is included in the response to the client's upgrade
 // request. Use the responseHeader to specify cookies (Set-Cookie) and the
 // application negotiated subprotocol (Sec-Websocket-Protocol).
+//
+// If the upgrade fails, then Upgrade replies to the client with an HTTP error
+// response.
 func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*Conn, error) {
 	if r.Method != "GET" {
 		return u.returnError(w, r, http.StatusMethodNotAllowed, "websocket: method not GET")
@@ -290,4 +293,11 @@ func Subprotocols(r *http.Request) []string {
 		protocols[i] = strings.TrimSpace(protocols[i])
 	}
 	return protocols
+}
+
+// IsWebSocketUpgrade returns true if the client requested upgrade to the
+// WebSocket protocol.
+func IsWebSocketUpgrade(r *http.Request) bool {
+	return tokenListContainsValue(r.Header, "Connection", "upgrade") &&
+		tokenListContainsValue(r.Header, "Upgrade", "websocket")
 }

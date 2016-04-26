@@ -7,6 +7,7 @@ package websocket
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"io"
 	"io/ioutil"
 	"net"
@@ -41,9 +42,16 @@ type cstServer struct {
 	URL string
 }
 
+const (
+	cstPath       = "/a/b"
+	cstRawQuery   = "x=y"
+	cstRequestURI = cstPath + "?" + cstRawQuery
+)
+
 func newServer(t *testing.T) *cstServer {
 	var s cstServer
 	s.Server = httptest.NewServer(cstHandler{t})
+	s.Server.URL += cstRequestURI
 	s.URL = makeWsProto(s.Server.URL)
 	return &s
 }
@@ -51,11 +59,22 @@ func newServer(t *testing.T) *cstServer {
 func newTLSServer(t *testing.T) *cstServer {
 	var s cstServer
 	s.Server = httptest.NewTLSServer(cstHandler{t})
+	s.Server.URL += cstRequestURI
 	s.URL = makeWsProto(s.Server.URL)
 	return &s
 }
 
 func (t cstHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != cstPath {
+		t.Logf("path=%v, want %v", r.URL.Path, cstPath)
+		http.Error(w, "bad path", 400)
+		return
+	}
+	if r.URL.RawQuery != cstRawQuery {
+		t.Logf("query=%v, want %v", r.URL.RawQuery, cstRawQuery)
+		http.Error(w, "bad path", 400)
+		return
+	}
 	subprotos := Subprotocols(r)
 	if !reflect.DeepEqual(subprotos, cstDialer.Subprotocols) {
 		t.Logf("subprotols=%v, want %v", subprotos, cstDialer.Subprotocols)
@@ -157,6 +176,46 @@ func TestProxyDial(t *testing.T) {
 	cstDialer.Proxy = http.ProxyFromEnvironment
 }
 
+func TestProxyAuthorizationDial(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	surl, _ := url.Parse(s.URL)
+	surl.User = url.UserPassword("username", "password")
+	cstDialer.Proxy = http.ProxyURL(surl)
+
+	connect := false
+	origHandler := s.Server.Config.Handler
+
+	// Capture the request Host header.
+	s.Server.Config.Handler = http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			proxyAuth := r.Header.Get("Proxy-Authorization")
+			expectedProxyAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte("username:password"))
+			if r.Method == "CONNECT" && proxyAuth == expectedProxyAuth {
+				connect = true
+				w.WriteHeader(200)
+				return
+			}
+
+			if !connect {
+				t.Log("connect with proxy authorization not recieved")
+				http.Error(w, "connect with proxy authorization not recieved", 405)
+				return
+			}
+			origHandler.ServeHTTP(w, r)
+		})
+
+	ws, _, err := cstDialer.Dial(s.URL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer ws.Close()
+	sendRecv(t, ws)
+
+	cstDialer.Proxy = http.ProxyFromEnvironment
+}
+
 func TestDial(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()
@@ -188,7 +247,7 @@ func TestDialTLS(t *testing.T) {
 	d := cstDialer
 	d.NetDial = func(network, addr string) (net.Conn, error) { return net.Dial(network, u.Host) }
 	d.TLSClientConfig = &tls.Config{RootCAs: certs}
-	ws, _, err := d.Dial("wss://example.com/", nil)
+	ws, _, err := d.Dial("wss://example.com"+cstRequestURI, nil)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}

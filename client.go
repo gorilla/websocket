@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -98,12 +99,19 @@ func parseURL(s string) (*url.URL, error) {
 		return nil, errMalformedURL
 	}
 
-	u.Host = s
-	u.Opaque = "/"
-	if i := strings.Index(s, "/"); i >= 0 {
-		u.Host = s[:i]
-		u.Opaque = s[i:]
+	if i := strings.Index(s, "?"); i >= 0 {
+		u.RawQuery = s[i+1:]
+		s = s[:i]
 	}
+
+	if i := strings.Index(s, "/"); i >= 0 {
+		u.Opaque = s[i:]
+		s = s[:i]
+	} else {
+		u.Opaque = "/"
+	}
+
+	u.Host = s
 
 	if strings.Contains(u.Host, "@") {
 		// Don't bother parsing user information because user information is
@@ -266,11 +274,19 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 	}
 
 	if proxyURL != nil {
+		connectHeader := make(http.Header)
+		if user := proxyURL.User; user != nil {
+			proxyUser := user.Username()
+			if proxyPassword, passwordSet := user.Password(); passwordSet {
+				credential := base64.StdEncoding.EncodeToString([]byte(proxyUser + ":" + proxyPassword))
+				connectHeader.Set("Proxy-Authorization", "Basic "+credential)
+			}
+		}
 		connectReq := &http.Request{
 			Method: "CONNECT",
 			URL:    &url.URL{Opaque: hostPort},
 			Host:   hostPort,
-			Header: make(http.Header),
+			Header: connectHeader,
 		}
 
 		connectReq.Write(netConn)
@@ -290,12 +306,8 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 	}
 
 	if u.Scheme == "https" {
-		cfg := d.TLSClientConfig
-		if cfg == nil {
-			cfg = &tls.Config{ServerName: hostNoPort}
-		} else if cfg.ServerName == "" {
-			shallowCopy := *cfg
-			cfg = &shallowCopy
+		cfg := cloneTLSConfig(d.TLSClientConfig)
+		if cfg.ServerName == "" {
 			cfg.ServerName = hostNoPort
 		}
 		tlsConn := tls.Client(netConn, cfg)
@@ -343,4 +355,33 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 	netConn.SetDeadline(time.Time{})
 	netConn = nil // to avoid close in defer.
 	return conn, resp, nil
+}
+
+// cloneTLSConfig clones all public fields except the fields
+// SessionTicketsDisabled and SessionTicketKey. This avoids copying the
+// sync.Mutex in the sync.Once and makes it safe to call cloneTLSConfig on a
+// config in active use.
+func cloneTLSConfig(cfg *tls.Config) *tls.Config {
+	if cfg == nil {
+		return &tls.Config{}
+	}
+	return &tls.Config{
+		Rand:                     cfg.Rand,
+		Time:                     cfg.Time,
+		Certificates:             cfg.Certificates,
+		NameToCertificate:        cfg.NameToCertificate,
+		GetCertificate:           cfg.GetCertificate,
+		RootCAs:                  cfg.RootCAs,
+		NextProtos:               cfg.NextProtos,
+		ServerName:               cfg.ServerName,
+		ClientAuth:               cfg.ClientAuth,
+		ClientCAs:                cfg.ClientCAs,
+		InsecureSkipVerify:       cfg.InsecureSkipVerify,
+		CipherSuites:             cfg.CipherSuites,
+		PreferServerCipherSuites: cfg.PreferServerCipherSuites,
+		ClientSessionCache:       cfg.ClientSessionCache,
+		MinVersion:               cfg.MinVersion,
+		MaxVersion:               cfg.MaxVersion,
+		CurvePreferences:         cfg.CurvePreferences,
+	}
 }
