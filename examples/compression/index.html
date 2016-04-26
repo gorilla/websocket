@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>WebSocket Example</title>
+        <style type="text/css">
+            body { font-family: helvetica; color: #333;}
+        </style>
+    </head>
+    <body>
+        <div id="conn-details" style="padding: 10px"></div>
+        <table style="width:100%"><tr>
+            <td style="width:50%;vertical-align:top">
+                <div style="text-align:center">
+                    <textarea id="inputArea" style="width:100%;min-height:250px"></textarea>
+                </div>
+                <div style="padding:10px"><button onclick="sendData()">send</button></div>        
+            </td>
+            <td style="width:50%;padding:5px;">
+                <div style="padding:10px">Echo Response:</div>
+                <pre id="fileData" style="padding:10px;border:none;min-height:250px;margin:0;white-space: pre-wrap;"></pre>
+            </td>
+        </tr></table>
+
+        <script type="text/javascript">
+
+            var inputElem = document.getElementById("inputArea");
+            var conn = new WebSocket("ws://127.0.0.1:9001/f");
+
+            (function() {
+                var data = document.getElementById("fileData");
+                conn.onopen = function(evt) {
+                    var connDetails = document.getElementById('conn-details');
+                    connDetails.textContent = 'Connection Extensions: [' + conn.extensions + ']';
+                }
+                conn.onclose = function(evt) {
+                    console.log(evt);
+                    data.textContent = 'Connection closed';
+                }
+                conn.onmessage = function(evt) {
+                    console.log('Message:', evt.data);
+                    data.textContent += '[ '+ (new Date()).toString() + ' ] ' + evt.data + '\n';
+                }
+            })();
+
+            function sendData() {
+                if (inputElem.value.length > 0) {
+                    conn.send(inputElem.value);
+                }
+            }
+            
+        </script>
+    </body>
+</html>

@@ -11,3 +11,10 @@ and start the client test driver
     wstest -m fuzzingclient -s fuzzingclient.json
 
 When the client completes, it writes a report to reports/clients/index.html.
+
+
+# Install client test driver
+
+	pip install autobahntestsuite
+
+This will install the test suite containing the `wstest` command.
