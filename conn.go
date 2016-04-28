@@ -14,6 +14,7 @@ import (
 	"net"
 	"strconv"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -43,6 +44,8 @@ const (
 	CloseMessageTooBig           = 1009
 	CloseMandatoryExtension      = 1010
 	CloseInternalServerErr       = 1011
+	CloseServiceRestart          = 1012
+	CloseTryAgainLater           = 1013
 	CloseTLSHandshake            = 1015
 )
 
@@ -182,6 +185,29 @@ func isControl(frameType int) bool {
 
 func isData(frameType int) bool {
 	return frameType == TextMessage || frameType == BinaryMessage
+}
+
+var validReceivedCloseCodes = map[int]bool{
+	// see http://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
+
+	CloseNormalClosure:           true,
+	CloseGoingAway:               true,
+	CloseProtocolError:           true,
+	CloseUnsupportedData:         true,
+	CloseNoStatusReceived:        false,
+	CloseAbnormalClosure:         false,
+	CloseInvalidFramePayloadData: true,
+	ClosePolicyViolation:         true,
+	CloseMessageTooBig:           true,
+	CloseMandatoryExtension:      true,
+	CloseInternalServerErr:       true,
+	CloseServiceRestart:          true,
+	CloseTryAgainLater:           true,
+	CloseTLSHandshake:            false,
+}
+
+func isValidReceivedCloseCode(code int) bool {
+	return validReceivedCloseCodes[code] || (code >= 3000 && code <= 4999)
 }
 
 func maskBytes(key [4]byte, pos int, b []byte) int {
@@ -747,7 +773,13 @@ func (c *Conn) advanceFrame() (int, error) {
 		if len(payload) >= 2 {
 			echoMessage = payload[:2]
 			closeCode = int(binary.BigEndian.Uint16(payload))
+			if !isValidReceivedCloseCode(closeCode) {
+				return noFrame, c.handleProtocolError("invalid close code")
+			}
 			closeText = string(payload[2:])
+			if !utf8.ValidString(closeText) {
+				return noFrame, c.handleProtocolError("invalid utf8 payload in close frame")
+			}
 		}
 		c.WriteControl(CloseMessage, echoMessage, time.Now().Add(writeWait))
 		return noFrame, &CloseError{Code: closeCode, Text: closeText}
