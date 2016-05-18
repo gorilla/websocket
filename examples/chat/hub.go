@@ -30,20 +30,20 @@ var mainHub = hub{
 func (hub *hub) run() {
 	for {
 		select {
-		case c := <-hub.register:
-			hub.connections[c] = true
-		case c := <-hub.unregister:
-			if _, ok := hub.connections[c]; ok {
-				delete(hub.connections, c)
-				close(c.send)
+		case conn := <-hub.register:
+			hub.connections[conn] = true
+		case conn := <-hub.unregister:
+			if _, ok := hub.connections[conn]; ok {
+				delete(hub.connections, conn)
+				close(conn.send)
 			}
-		case m := <-hub.broadcast:
-			for c := range hub.connections {
+		case message := <-hub.broadcast:
+			for conn := range hub.connections {
 				select {
-				case c.send <- m:
+				case conn.send <- message:
 				default:
-					close(c.send)
-					delete(hub.connections, c)
+					close(conn.send)
+					delete(hub.connections, conn)
 				}
 			}
 		}
