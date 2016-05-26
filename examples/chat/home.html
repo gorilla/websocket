@@ -4,22 +4,21 @@
 <title>Chat Example</title>
 <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
 <script type="text/javascript">
-    $(function() {
-
+$(function () {
     var conn;
     var msg = $("#msg");
     var log = $("#log");
 
     function appendLog(msg) {
-        var d = log[0]
-        var doScroll = d.scrollTop == d.scrollHeight - d.clientHeight;
-        msg.appendTo(log)
+        var d = log[0];
+        var doScroll = d.scrollTop === d.scrollHeight - d.clientHeight;
+        msg.appendTo(log);
         if (doScroll) {
             d.scrollTop = d.scrollHeight - d.clientHeight;
         }
     }
 
-    $("#form").submit(function() {
+    $("#form").submit(function () {
         if (!conn) {
             return false;
         }
@@ -28,21 +27,21 @@
         }
         conn.send(msg.val());
         msg.val("");
-        return false
+        return false;
     });
 
     if (window["WebSocket"]) {
         conn = new WebSocket("ws://{{$}}/ws");
-        conn.onclose = function(evt) {
-            appendLog($("<div><b>Connection closed.</b></div>"))
-        }
-        conn.onmessage = function(evt) {
-            appendLog($("<div/>").text(evt.data))
-        }
+        conn.onclose = function (evt) {
+            appendLog($("<div><b>Connection closed.</b></div>"));
+        };
+        conn.onmessage = function (evt) {
+            appendLog($("<div/>").text(evt.data));
+        };
     } else {
-        appendLog($("<div><b>Your browser does not support WebSockets.</b></div>"))
+        appendLog($("<div><b>Your browser does not support WebSockets.</b></div>"));
     }
-    });
+});
 </script>
 <style type="text/css">
 html {
