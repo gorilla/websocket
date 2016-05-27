@@ -6,44 +6,44 @@ package main
 
 // hub maintains the set of active connections and broadcasts messages to the
 // connections.
-type hub struct {
+type Hub struct {
 	// Registered connections.
-	connections map[*connection]bool
+	connections map[*Conn]bool
 
 	// Inbound messages from the connections.
 	broadcast chan []byte
 
 	// Register requests from the connections.
-	register chan *connection
+	register chan *Conn
 
 	// Unregister requests from connections.
-	unregister chan *connection
+	unregister chan *Conn
 }
 
-var h = hub{
+var hub = Hub{
 	broadcast:   make(chan []byte),
-	register:    make(chan *connection),
-	unregister:  make(chan *connection),
-	connections: make(map[*connection]bool),
+	register:    make(chan *Conn),
+	unregister:  make(chan *Conn),
+	connections: make(map[*Conn]bool),
 }
 
-func (h *hub) run() {
+func (h *Hub) run() {
 	for {
 		select {
-		case c := <-h.register:
-			h.connections[c] = true
-		case c := <-h.unregister:
-			if _, ok := h.connections[c]; ok {
-				delete(h.connections, c)
-				close(c.send)
+		case conn := <-h.register:
+			h.connections[conn] = true
+		case conn := <-h.unregister:
+			if _, ok := h.connections[conn]; ok {
+				delete(h.connections, conn)
+				close(conn.send)
 			}
-		case m := <-h.broadcast:
-			for c := range h.connections {
+		case message := <-h.broadcast:
+			for conn := range h.connections {
 				select {
-				case c.send <- m:
+				case conn.send <- message:
 				default:
-					close(c.send)
-					delete(h.connections, c)
+					close(conn.send)
+					delete(hub.connections, conn)
 				}
 			}
 		}

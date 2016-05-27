@@ -12,7 +12,7 @@ import (
 )
 
 var addr = flag.String("addr", ":8080", "http service address")
-var homeTempl = template.Must(template.ParseFiles("home.html"))
+var homeTemplate = template.Must(template.ParseFiles("home.html"))
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
@@ -24,12 +24,12 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	homeTempl.Execute(w, r.Host)
+	homeTemplate.Execute(w, r.Host)
 }
 
 func main() {
 	flag.Parse()
-	go h.run()
+	go hub.run()
 	http.HandleFunc("/", serveHome)
 	http.HandleFunc("/ws", serveWs)
 	err := http.ListenAndServe(*addr, nil)

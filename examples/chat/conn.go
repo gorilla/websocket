@@ -30,8 +30,8 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-// connection is an middleman between the websocket connection and the hub.
-type connection struct {
+// Conn is an middleman between the websocket connection and the hub.
+type Conn struct {
 	// The websocket connection.
 	ws *websocket.Conn
 
@@ -40,9 +40,9 @@ type connection struct {
 }
 
 // readPump pumps messages from the websocket connection to the hub.
-func (c *connection) readPump() {
+func (c *Conn) readPump() {
 	defer func() {
-		h.unregister <- c
+		hub.unregister <- c
 		c.ws.Close()
 	}()
 	c.ws.SetReadLimit(maxMessageSize)
@@ -56,18 +56,18 @@ func (c *connection) readPump() {
 			}
 			break
 		}
-		h.broadcast <- message
+		hub.broadcast <- message
 	}
 }
 
 // write writes a message with the given message type and payload.
-func (c *connection) write(mt int, payload []byte) error {
+func (c *Conn) write(mt int, payload []byte) error {
 	c.ws.SetWriteDeadline(time.Now().Add(writeWait))
 	return c.ws.WriteMessage(mt, payload)
 }
 
 // writePump pumps messages from the hub to the websocket connection.
-func (c *connection) writePump() {
+func (c *Conn) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
@@ -98,8 +98,8 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
-	c := &connection{send: make(chan []byte, 256), ws: ws}
-	h.register <- c
-	go c.writePump()
-	c.readPump()
+	conn := &Conn{send: make(chan []byte, 256), ws: ws}
+	hub.register <- conn
+	go conn.writePump()
+	conn.readPump()
 }
