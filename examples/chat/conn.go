@@ -30,8 +30,8 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-// connection is an middleman between the websocket connection and the hub.
-type connection struct {
+// Conn is an middleman between the websocket connection and the hub.
+type Conn struct {
 	// The websocket connection.
 	ws *websocket.Conn
 
@@ -40,51 +40,51 @@ type connection struct {
 }
 
 // readPump pumps messages from the websocket connection to the hub.
-func (conn *connection) readPump() {
+func (c *Conn) readPump() {
 	defer func() {
-		mainHub.unregister <- conn
-		conn.ws.Close()
+		hub.unregister <- c
+		c.ws.Close()
 	}()
-	conn.ws.SetReadLimit(maxMessageSize)
-	conn.ws.SetReadDeadline(time.Now().Add(pongWait))
-	conn.ws.SetPongHandler(func(string) error { conn.ws.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	c.ws.SetReadLimit(maxMessageSize)
+	c.ws.SetReadDeadline(time.Now().Add(pongWait))
+	c.ws.SetPongHandler(func(string) error { c.ws.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 	for {
-		_, message, err := conn.ws.ReadMessage()
+		_, message, err := c.ws.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
 				log.Printf("error: %v", err)
 			}
 			break
 		}
-		mainHub.broadcast <- message
+		hub.broadcast <- message
 	}
 }
 
 // write writes a message with the given message type and payload.
-func (conn *connection) write(mt int, payload []byte) error {
-	conn.ws.SetWriteDeadline(time.Now().Add(writeWait))
-	return conn.ws.WriteMessage(mt, payload)
+func (c *Conn) write(mt int, payload []byte) error {
+	c.ws.SetWriteDeadline(time.Now().Add(writeWait))
+	return c.ws.WriteMessage(mt, payload)
 }
 
 // writePump pumps messages from the hub to the websocket connection.
-func (conn *connection) writePump() {
+func (c *Conn) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		conn.ws.Close()
+		c.ws.Close()
 	}()
 	for {
 		select {
-		case message, ok := <-conn.send:
+		case message, ok := <-c.send:
 			if !ok {
-				conn.write(websocket.CloseMessage, []byte{})
+				c.write(websocket.CloseMessage, []byte{})
 				return
 			}
-			if err := conn.write(websocket.TextMessage, message); err != nil {
+			if err := c.write(websocket.TextMessage, message); err != nil {
 				return
 			}
 		case <-ticker.C:
-			if err := conn.write(websocket.PingMessage, []byte{}); err != nil {
+			if err := c.write(websocket.PingMessage, []byte{}); err != nil {
 				return
 			}
 		}
@@ -98,8 +98,8 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
-	conn := &connection{send: make(chan []byte, 256), ws: ws}
-	mainHub.register <- conn
+	conn := &Conn{send: make(chan []byte, 256), ws: ws}
+	hub.register <- conn
 	go conn.writePump()
 	conn.readPump()
 }

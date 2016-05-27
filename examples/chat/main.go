@@ -29,7 +29,7 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	flag.Parse()
-	go mainHub.run()
+	go hub.run()
 	http.HandleFunc("/", serveHome)
 	http.HandleFunc("/ws", serveWs)
 	err := http.ListenAndServe(*addr, nil)
