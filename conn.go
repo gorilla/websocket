@@ -872,6 +872,11 @@ func (c *Conn) SetReadLimit(limit int64) {
 	c.readLimit = limit
 }
 
+// PingHandler returns the current ping handler
+func (c *Conn) PingHandler() func(appData string) error {
+	return c.handlePing
+}
+
 // SetPingHandler sets the handler for ping messages received from the peer.
 // The appData argument to h is the PING frame application data. The default
 // ping handler sends a pong to the peer.
@@ -888,6 +893,11 @@ func (c *Conn) SetPingHandler(h func(appData string) error) {
 		}
 	}
 	c.handlePing = h
+}
+
+// PongHandler returns the current pong handler
+func (c *Conn) PongHandler() func(appData string) error {
+	return c.handlePong
 }
 
 // SetPongHandler sets the handler for pong messages received from the peer.
