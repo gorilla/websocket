@@ -8,7 +8,7 @@ package main
 import (
 	"errors"
 	"flag"
-	"github.com/gorilla/websocket"
+	"github.com/euforia/websocket"
 	"io"
 	"log"
 	"net/http"
@@ -21,6 +21,9 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 4096,
 	CheckOrigin: func(r *http.Request) bool {
 		return true
+	},
+	Extensions: []string{
+		"permessage-deflate; server_no_context_takeover; client_no_context_takeover",
 	},
 }
 

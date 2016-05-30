@@ -70,6 +70,9 @@ type Dialer struct {
 
 	// Subprotocols specifies the client's requested subprotocols.
 	Subprotocols []string
+
+	// Extensions specifies the client requested extensions
+	Extensions []string
 }
 
 var errMalformedURL = errors.New("malformed ws or wss URL")
@@ -204,6 +207,10 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 	if len(d.Subprotocols) > 0 {
 		req.Header["Sec-WebSocket-Protocol"] = []string{strings.Join(d.Subprotocols, ", ")}
 	}
+	if len(d.Extensions) > 0 {
+		req.Header["Sec-WebSocket-Extensions"] = d.Extensions
+	}
+
 	for k, vs := range requestHeader {
 		switch {
 		case k == "Host":
@@ -214,6 +221,7 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 			k == "Connection" ||
 			k == "Sec-Websocket-Key" ||
 			k == "Sec-Websocket-Version" ||
+			(k == "Sec-WebSocket-Extensions" && len(d.Extensions) > 0) ||
 			(k == "Sec-Websocket-Protocol" && len(d.Subprotocols) > 0):
 			return nil, nil, errors.New("websocket: duplicate header not allowed: " + k)
 		default:
@@ -339,6 +347,10 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 
 	resp.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
 	conn.subprotocol = resp.Header.Get("Sec-Websocket-Protocol")
+
+	if len(resp.Header.Get("Sec-WebSocket-Extensions")) > 0 {
+		conn.compressionNegotiated = true
+	}
 
 	netConn.SetDeadline(time.Time{})
 	netConn = nil // to avoid close in defer.
