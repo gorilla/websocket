@@ -5,10 +5,12 @@
 package main
 
 import (
-	"github.com/gorilla/websocket"
+	"bytes"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -23,6 +25,11 @@ const (
 
 	// Maximum message size allowed from peer.
 	maxMessageSize = 512
+)
+
+var (
+	newline = []byte{'\n'}
+	space   = []byte{' '}
 )
 
 var upgrader = websocket.Upgrader{
@@ -56,6 +63,7 @@ func (c *Conn) readPump() {
 			}
 			break
 		}
+		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
 		hub.broadcast <- message
 	}
 }
@@ -77,10 +85,26 @@ func (c *Conn) writePump() {
 		select {
 		case message, ok := <-c.send:
 			if !ok {
+				// The hub closed the channel.
 				c.write(websocket.CloseMessage, []byte{})
 				return
 			}
-			if err := c.write(websocket.TextMessage, message); err != nil {
+
+			c.ws.SetWriteDeadline(time.Now().Add(writeWait))
+			w, err := c.ws.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+			w.Write(message)
+
+			// Add queued chat messages to the current websocket message.
+			n := len(c.send)
+			for i := 0; i < n; i++ {
+				w.Write(newline)
+				w.Write(<-c.send)
+			}
+
+			if err := w.Close(); err != nil {
 				return
 			}
 		case <-ticker.C:
