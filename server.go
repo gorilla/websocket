@@ -53,6 +53,7 @@ func (u *Upgrader) returnError(w http.ResponseWriter, r *http.Request, status in
 	if u.Error != nil {
 		u.Error(w, r, status, err)
 	} else {
+		w.Header().Set("Sec-Websocket-Version", "13")
 		http.Error(w, http.StatusText(status), status)
 	}
 	return nil, err
@@ -99,7 +100,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	if r.Method != "GET" {
 		return u.returnError(w, r, http.StatusMethodNotAllowed, "websocket: method not GET")
 	}
-	if values := r.Header["Sec-Websocket-Version"]; len(values) == 0 || values[0] != "13" {
+	if !tokenListContainsValue(r.Header, "Sec-Websocket-Version", "13") {
 		return u.returnError(w, r, http.StatusBadRequest, "websocket: version != 13")
 	}
 
