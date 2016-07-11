@@ -43,7 +43,7 @@ func (h *Hub) run() {
 				case conn.send <- message:
 				default:
 					close(conn.send)
-					delete(hub.connections, conn)
+					delete(h.connections, conn)
 				}
 			}
 		}
