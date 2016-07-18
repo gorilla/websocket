@@ -4,46 +4,48 @@
 
 package main
 
-// hub maintains the set of active connections and broadcasts messages to the
-// connections.
+// hub maintains the set of active clients and broadcasts messages to the
+// clients.
 type Hub struct {
-	// Registered connections.
-	connections map[*Conn]bool
+	// Registered clients.
+	clients map[*Client]bool
 
-	// Inbound messages from the connections.
+	// Inbound messages from the clients.
 	broadcast chan []byte
 
-	// Register requests from the connections.
-	register chan *Conn
+	// Register requests from the clients.
+	register chan *Client
 
-	// Unregister requests from connections.
-	unregister chan *Conn
+	// Unregister requests from clients.
+	unregister chan *Client
 }
 
-var hub = Hub{
-	broadcast:   make(chan []byte),
-	register:    make(chan *Conn),
-	unregister:  make(chan *Conn),
-	connections: make(map[*Conn]bool),
+func newHub() *Hub {
+	return &Hub{
+		broadcast:  make(chan []byte),
+		register:   make(chan *Client),
+		unregister: make(chan *Client),
+		clients:    make(map[*Client]bool),
+	}
 }
 
 func (h *Hub) run() {
 	for {
 		select {
-		case conn := <-h.register:
-			h.connections[conn] = true
-		case conn := <-h.unregister:
-			if _, ok := h.connections[conn]; ok {
-				delete(h.connections, conn)
-				close(conn.send)
+		case client := <-h.register:
+			h.clients[client] = true
+		case client := <-h.unregister:
+			if _, ok := h.clients[client]; ok {
+				delete(h.clients, client)
+				close(client.send)
 			}
 		case message := <-h.broadcast:
-			for conn := range h.connections {
+			for client := range h.clients {
 				select {
-				case conn.send <- message:
+				case client.send <- message:
 				default:
-					close(conn.send)
-					delete(h.connections, conn)
+					close(client.send)
+					delete(h.clients, client)
 				}
 			}
 		}
