@@ -10,7 +10,6 @@ import (
 	"encoding/base64"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -243,11 +242,9 @@ func TestDialTLS(t *testing.T) {
 		}
 	}
 
-	u, _ := url.Parse(s.URL)
 	d := cstDialer
-	d.NetDial = func(network, addr string) (net.Conn, error) { return net.Dial(network, u.Host) }
 	d.TLSClientConfig = &tls.Config{RootCAs: certs}
-	ws, _, err := d.Dial("wss://example.com"+cstRequestURI, nil)
+	ws, _, err := d.Dial(s.URL, nil)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -267,7 +264,7 @@ func xTestDialTLSBadCert(t *testing.T) {
 	}
 }
 
-func xTestDialTLSNoVerify(t *testing.T) {
+func TestDialTLSNoVerify(t *testing.T) {
 	s := newTLSServer(t)
 	defer s.Close()
 
