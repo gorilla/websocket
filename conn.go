@@ -985,6 +985,13 @@ func (c *Conn) UnderlyingConn() net.Conn {
 	return c.conn
 }
 
+// EnableWriteCompression enables and disables write compression of
+// subsequent text and binary messages. This function is a noop if
+// compression was not negotiated with the peer.
+func (c *Conn) EnableWriteCompression(enable bool) {
+	c.enableWriteCompression = enable
+}
+
 // FormatCloseMessage formats closeCode and text as a WebSocket close message.
 func FormatCloseMessage(closeCode int, text string) []byte {
 	buf := make([]byte, 2+len(text))
