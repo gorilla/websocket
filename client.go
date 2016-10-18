@@ -23,6 +23,8 @@ import (
 // invalid.
 var ErrBadHandshake = errors.New("websocket: bad handshake")
 
+var errInvalidCompression = errors.New("websocket: invalid compression negotiation")
+
 // NewClient creates a new client connection using the given net connection.
 // The URL u specifies the host and request URI. Use requestHeader to specify
 // the origin (Origin), subprotocols (Sec-WebSocket-Protocol) and cookies
@@ -70,6 +72,12 @@ type Dialer struct {
 
 	// Subprotocols specifies the client's requested subprotocols.
 	Subprotocols []string
+
+	// EnableCompression specifies if the client should attempt to negotiate
+	// per message compression (RFC 7692). Setting this value to true does not
+	// guarantee that compression will be supported. Currently only "no context
+	// takeover" modes are supported.
+	EnableCompression bool
 }
 
 var errMalformedURL = errors.New("malformed ws or wss URL")
@@ -214,11 +222,16 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 			k == "Connection" ||
 			k == "Sec-Websocket-Key" ||
 			k == "Sec-Websocket-Version" ||
+			k == "Sec-Websocket-Extensions" ||
 			(k == "Sec-Websocket-Protocol" && len(d.Subprotocols) > 0):
 			return nil, nil, errors.New("websocket: duplicate header not allowed: " + k)
 		default:
 			req.Header[k] = vs
 		}
+	}
+
+	if d.EnableCompression {
+		req.Header.Set("Sec-Websocket-Extensions", "permessage-deflate; server_no_context_takeover; client_no_context_takeover")
 	}
 
 	hostPort, hostNoPort := hostPortNoPort(u)
@@ -335,6 +348,20 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		n, _ := io.ReadFull(resp.Body, buf)
 		resp.Body = ioutil.NopCloser(bytes.NewReader(buf[:n]))
 		return nil, resp, ErrBadHandshake
+	}
+
+	for _, ext := range parseExtensions(req.Header) {
+		if ext[""] != "permessage-deflate" {
+			continue
+		}
+		_, snct := ext["server_no_context_takeover"]
+		_, cnct := ext["client_no_context_takeover"]
+		if !snct || !cnct {
+			return nil, resp, errInvalidCompression
+		}
+		conn.newCompressionWriter = compressNoContextTakeover
+		conn.newDecompressionReader = decompressNoContextTakeover
+		break
 	}
 
 	resp.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
