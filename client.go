@@ -73,11 +73,11 @@ type Dialer struct {
 	// Subprotocols specifies the client's requested subprotocols.
 	Subprotocols []string
 
-	// CompressionSupported specifies if the client should attempt to negotiate per
-	// message compression (RFC 7692). Setting this value to true does not
+	// EnableCompression specifies if the client should attempt to negotiate
+	// per message compression (RFC 7692). Setting this value to true does not
 	// guarantee that compression will be supported. Currently only "no context
 	// takeover" modes are supported.
-	CompressionSupported bool
+	EnableCompression bool
 }
 
 var errMalformedURL = errors.New("malformed ws or wss URL")
@@ -230,7 +230,7 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		}
 	}
 
-	if d.CompressionSupported {
+	if d.EnableCompression {
 		req.Header.Set("Sec-Websocket-Extensions", "permessage-deflate; server_no_context_takeover; client_no_context_takeover")
 	}
 

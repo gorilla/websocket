@@ -48,60 +48,65 @@ func TestFraming(t *testing.T) {
 		writeBuf[i] = byte(i)
 	}
 
-	for _, isServer := range []bool{true, false} {
-		for _, chunker := range readChunkers {
+	for _, compress := range []bool{false, true} {
+		for _, isServer := range []bool{true, false} {
+			for _, chunker := range readChunkers {
 
-			var connBuf bytes.Buffer
-			wc := newConn(fakeNetConn{Reader: nil, Writer: &connBuf}, isServer, 1024, 1024)
-			rc := newConn(fakeNetConn{Reader: chunker.f(&connBuf), Writer: nil}, !isServer, 1024, 1024)
+				var connBuf bytes.Buffer
+				wc := newConn(fakeNetConn{Reader: nil, Writer: &connBuf}, isServer, 1024, 1024)
+				rc := newConn(fakeNetConn{Reader: chunker.f(&connBuf), Writer: nil}, !isServer, 1024, 1024)
+				if compress {
+					wc.newCompressionWriter = compressNoContextTakeover
+					rc.newDecompressionReader = decompressNoContextTakeover
+				}
+				for _, n := range frameSizes {
+					for _, iocopy := range []bool{true, false} {
+						name := fmt.Sprintf("z:%v, s:%v, r:%s, n:%d c:%v", compress, isServer, chunker.name, n, iocopy)
 
-			for _, n := range frameSizes {
-				for _, iocopy := range []bool{true, false} {
-					name := fmt.Sprintf("s:%v, r:%s, n:%d c:%v", isServer, chunker.name, n, iocopy)
+						w, err := wc.NextWriter(TextMessage)
+						if err != nil {
+							t.Errorf("%s: wc.NextWriter() returned %v", name, err)
+							continue
+						}
+						var nn int
+						if iocopy {
+							var n64 int64
+							n64, err = io.Copy(w, bytes.NewReader(writeBuf[:n]))
+							nn = int(n64)
+						} else {
+							nn, err = w.Write(writeBuf[:n])
+						}
+						if err != nil || nn != n {
+							t.Errorf("%s: w.Write(writeBuf[:n]) returned %d, %v", name, nn, err)
+							continue
+						}
+						err = w.Close()
+						if err != nil {
+							t.Errorf("%s: w.Close() returned %v", name, err)
+							continue
+						}
 
-					w, err := wc.NextWriter(TextMessage)
-					if err != nil {
-						t.Errorf("%s: wc.NextWriter() returned %v", name, err)
-						continue
-					}
-					var nn int
-					if iocopy {
-						var n64 int64
-						n64, err = io.Copy(w, bytes.NewReader(writeBuf[:n]))
-						nn = int(n64)
-					} else {
-						nn, err = w.Write(writeBuf[:n])
-					}
-					if err != nil || nn != n {
-						t.Errorf("%s: w.Write(writeBuf[:n]) returned %d, %v", name, nn, err)
-						continue
-					}
-					err = w.Close()
-					if err != nil {
-						t.Errorf("%s: w.Close() returned %v", name, err)
-						continue
-					}
+						opCode, r, err := rc.NextReader()
+						if err != nil || opCode != TextMessage {
+							t.Errorf("%s: NextReader() returned %d, r, %v", name, opCode, err)
+							continue
+						}
+						rbuf, err := ioutil.ReadAll(r)
+						if err != nil {
+							t.Errorf("%s: ReadFull() returned rbuf, %v", name, err)
+							continue
+						}
 
-					opCode, r, err := rc.NextReader()
-					if err != nil || opCode != TextMessage {
-						t.Errorf("%s: NextReader() returned %d, r, %v", name, opCode, err)
-						continue
-					}
-					rbuf, err := ioutil.ReadAll(r)
-					if err != nil {
-						t.Errorf("%s: ReadFull() returned rbuf, %v", name, err)
-						continue
-					}
+						if len(rbuf) != n {
+							t.Errorf("%s: len(rbuf) is %d, want %d", name, len(rbuf), n)
+							continue
+						}
 
-					if len(rbuf) != n {
-						t.Errorf("%s: len(rbuf) is %d, want %d", name, len(rbuf), n)
-						continue
-					}
-
-					for i, b := range rbuf {
-						if byte(i) != b {
-							t.Errorf("%s: bad byte at offset %d", name, i)
-							break
+						for i, b := range rbuf {
+							if byte(i) != b {
+								t.Errorf("%s: bad byte at offset %d", name, i)
+								break
+							}
 						}
 					}
 				}

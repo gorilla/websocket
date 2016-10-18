@@ -47,11 +47,11 @@ type Upgrader struct {
 	// must match the host of the request.
 	CheckOrigin func(r *http.Request) bool
 
-	// CompressionSupported specify if the server should attempt to negotiate per
+	// EnableCompression specify if the server should attempt to negotiate per
 	// message compression (RFC 7692). Setting this value to true does not
 	// guarantee that compression will be supported. Currently only "no context
 	// takeover" modes are supported.
-	CompressionSupported bool
+	EnableCompression bool
 }
 
 func (u *Upgrader) returnError(w http.ResponseWriter, r *http.Request, status int, reason string) (*Conn, error) {
@@ -140,7 +140,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 
 	// Negotiate PMCE
 	var compress bool
-	if u.CompressionSupported {
+	if u.EnableCompression {
 		for _, ext := range parseExtensions(r.Header) {
 			if ext[""] != "permessage-deflate" {
 				continue

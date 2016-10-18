@@ -20,9 +20,10 @@ import (
 )
 
 var cstUpgrader = Upgrader{
-	Subprotocols:    []string{"p0", "p1"},
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+	Subprotocols:      []string{"p0", "p1"},
+	ReadBufferSize:    1024,
+	WriteBufferSize:   1024,
+	EnableCompression: true,
 	Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
 		http.Error(w, reason.Error(), status)
 	},
@@ -444,5 +445,19 @@ func TestHostHeader(t *testing.T) {
 		t.Fatalf("gotHost = %q, want \"testhost\"", gotHost)
 	}
 
+	sendRecv(t, ws)
+}
+
+func TestDialCompression(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	dialer := cstDialer
+	dialer.EnableCompression = true
+	ws, _, err := dialer.Dial(s.URL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer ws.Close()
 	sendRecv(t, ws)
 }

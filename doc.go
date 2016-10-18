@@ -153,8 +153,8 @@
 // Compression [Experimental]
 //
 // Per message compression extensions (RFC 7692) are experimentally supported
-// by this package in a limited capacity. Enabling the CompressionSupported
-// option in Dialer or Upgrader will attempt to negotiate per message deflate
+// by this package in a limited capacity. Setting the EnableCompression option
+// to true in Dialer or Upgrader will attempt to negotiate per message deflate
 // support. If compression was successfully negotiated with the connection's
 // peer, any message received in compressed form will be automatically
 // decompressed. All Read methods will return uncompressed bytes.
