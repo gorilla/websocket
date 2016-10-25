@@ -46,6 +46,9 @@ type Client struct {
 
 	// Buffered channel of outbound messages.
 	send chan []byte
+	
+	// Mutex to prevent concurrent writing to connection.
+	mux sync.Mutex
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -72,6 +75,8 @@ func (c *Client) readPump() {
 
 // write writes a message with the given message type and payload.
 func (c *Client) write(mt int, payload []byte) error {
+	c.mux.Lock()
+	defer c.mux.Unlock()
 	c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 	return c.conn.WriteMessage(mt, payload)
 }
