@@ -49,6 +49,10 @@ type Client struct {
 }
 
 // readPump pumps messages from the websocket connection to the hub.
+//
+// The application runs readPump in a per-connection goroutine. The application
+// ensures that there is at most one reader on a connection by executing all
+// reads from this goroutine.
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
@@ -70,13 +74,11 @@ func (c *Client) readPump() {
 	}
 }
 
-// write writes a message with the given message type and payload.
-func (c *Client) write(mt int, payload []byte) error {
-	c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-	return c.conn.WriteMessage(mt, payload)
-}
-
 // writePump pumps messages from the hub to the websocket connection.
+//
+// A goroutine running writePump is started for each connection. The
+// application ensures that there is at most one writer to a connection by
+// executing all writes from this goroutine.
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -86,13 +88,13 @@ func (c *Client) writePump() {
 	for {
 		select {
 		case message, ok := <-c.send:
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				// The hub closed the channel.
-				c.write(websocket.CloseMessage, []byte{})
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
 				return
@@ -110,7 +112,8 @@ func (c *Client) writePump() {
 				return
 			}
 		case <-ticker.C:
-			if err := c.write(websocket.PingMessage, []byte{}); err != nil {
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
 				return
 			}
 		}

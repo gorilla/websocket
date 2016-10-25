@@ -72,6 +72,17 @@ there's an error writing to the websocket connection.
 Finally, the HTTP handler calls the client's `readPump` method. This method
 transfers inbound messages from the websocket to the hub.
 
+WebSocket connections [support one concurrent reader and one concurrent
+writer](https://godoc.org/github.com/gorilla/websocket#hdr-Concurrency). The
+application ensures that these concurrency requirements are met by executing
+all reads from the `readPump` goroutine and all writes from the `writePump`
+goroutine.
+
+To improve efficiency under high load, the `writePump` function coalesces
+pending chat messages in the `send` channel to a single WebSocket message. This
+reduces the number of system calls and the amount of data sent over the
+network.
+
 ## Frontend
 
 The frontend code is in [home.html](https://github.com/gorilla/websocket/blob/master/examples/chat/home.html).
