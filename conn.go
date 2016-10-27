@@ -177,6 +177,7 @@ var (
 	errBadWriteOpCode      = errors.New("websocket: bad write message type")
 	errWriteClosed         = errors.New("websocket: write closed")
 	errInvalidControlFrame = errors.New("websocket: invalid control frame")
+	errPartialWrite        = errors.New("websocket: partial write")
 )
 
 func hideTempErr(err error) error {
@@ -322,12 +323,11 @@ func (c *Conn) write(frameType int, deadline time.Time, bufs ...[]byte) error {
 	for _, buf := range bufs {
 		if len(buf) > 0 {
 			n, err := c.conn.Write(buf)
-			if n != len(buf) {
-				// Close on partial write.
-				c.conn.Close()
-			}
 			if err != nil {
 				return err
+			}
+			if n != len(buf) {
+				return errPartialWrite
 			}
 		}
 	}
@@ -387,8 +387,8 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 
 	c.conn.SetWriteDeadline(deadline)
 	n, err := c.conn.Write(buf)
-	if n != 0 && n != len(buf) {
-		c.conn.Close()
+	if err == nil && n != 0 && n != len(buf) {
+		err = errPartialWrite
 	}
 	return hideTempErr(err)
 }
