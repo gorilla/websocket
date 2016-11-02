@@ -28,7 +28,7 @@ func maskBytes(key [4]byte, pos int, b []byte) int {
 	}
 
 	// Mask one byte at a time to word boundary.
-	if n := int(uintptr(unsafe.Pointer(&b))) % wordSize; n != 0 {
+	if n := int(uintptr(unsafe.Pointer(&b[0]))) % wordSize; n != 0 {
 		n = wordSize - n
 		for i := range b[:n] {
 			b[i] ^= key[pos&3]
