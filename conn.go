@@ -247,6 +247,7 @@ type Conn struct {
 	readMaskKey   [4]byte
 	handlePong    func(string) error
 	handlePing    func(string) error
+	handleClose   func(int, string) error
 	readErrCount  int
 	messageReader *messageReader // the current low-level reader
 
@@ -277,6 +278,7 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) 
 		writeBuf:               make([]byte, writeBufferSize+maxFrameHeaderSize),
 		enableWriteCompression: true,
 	}
+	c.SetCloseHandler(nil)
 	c.SetPingHandler(nil)
 	c.SetPongHandler(nil)
 	return c
@@ -804,11 +806,9 @@ func (c *Conn) advanceFrame() (int, error) {
 			return noFrame, err
 		}
 	case CloseMessage:
-		echoMessage := []byte{}
 		closeCode := CloseNoStatusReceived
 		closeText := ""
 		if len(payload) >= 2 {
-			echoMessage = payload[:2]
 			closeCode = int(binary.BigEndian.Uint16(payload))
 			if !isValidReceivedCloseCode(closeCode) {
 				return noFrame, c.handleProtocolError("invalid close code")
@@ -818,7 +818,9 @@ func (c *Conn) advanceFrame() (int, error) {
 				return noFrame, c.handleProtocolError("invalid utf8 payload in close frame")
 			}
 		}
-		c.WriteControl(CloseMessage, echoMessage, time.Now().Add(writeWait))
+		if err := c.handleClose(closeCode, closeText); err != nil {
+			return noFrame, err
+		}
 		return noFrame, &CloseError{Code: closeCode, Text: closeText}
 	}
 
@@ -944,6 +946,29 @@ func (c *Conn) SetReadDeadline(t time.Time) error {
 // and returns ErrReadLimit to the application.
 func (c *Conn) SetReadLimit(limit int64) {
 	c.readLimit = limit
+}
+
+// CloseHandler returns the current close handler
+func (c *Conn) CloseHandler() func(code int, text string) error {
+	return c.handleClose
+}
+
+// SetCloseHandler sets the handler for close messages received from the peer.
+// The code argument to h is the received close code or CloseNoStatusReceived
+// if the close message is empty. The default close handler sends a close frame
+// back to the peer.
+func (c *Conn) SetCloseHandler(h func(code int, text string) error) {
+	if h == nil {
+		h = func(code int, text string) error {
+			message := []byte{}
+			if code != CloseNoStatusReceived {
+				message = FormatCloseMessage(code, "")
+			}
+			c.WriteControl(CloseMessage, message, time.Now().Add(writeWait))
+			return nil
+		}
+	}
+	c.handleClose = h
 }
 
 // PingHandler returns the current ping handler
