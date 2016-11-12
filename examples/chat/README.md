@@ -59,7 +59,7 @@ unregisters the client and closes the websocket.
 
 The code for the `Client` type is in [client.go](https://github.com/gorilla/websocket/blob/master/examples/chat/client.go).
 
-The `wsHandler` function is registered by the application's `main` function as
+The `serveWs` function is registered by the application's `main` function as
 an HTTP handler. The handler upgrades the HTTP connection to the WebSocket
 protocol, creates a client, registers the client with the hub and schedules the
 client to be unregistered using a defer statement.
