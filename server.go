@@ -52,6 +52,15 @@ type Upgrader struct {
 	// guarantee that compression will be supported. Currently only "no context
 	// takeover" modes are supported.
 	EnableCompression bool
+
+	// WriteBufferPool specifies a pool of buffers to use for write methods. A
+	// nil value will cause a buffer to be allocated per connection. It is
+	// recommended to use a buffer pool for applications that have a large number
+	// of connections and a modest volume of writes. The provided buffer pool
+	// must not implement a new value instatiator (e.g. Do not implement
+	// sync.Pool.New()), and must not be shared across connections that have
+	// different values of WriteBufferSize.
+	WriteBufferPool BufferPool
 }
 
 func (u *Upgrader) returnError(w http.ResponseWriter, r *http.Request, status int, reason string) (*Conn, error) {
@@ -173,6 +182,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	}
 
 	c := newConn(netConn, true, u.ReadBufferSize, u.WriteBufferSize)
+	c.writePool = u.WriteBufferPool
 	c.subprotocol = subprotocol
 
 	if compress {
@@ -180,6 +190,11 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		c.newDecompressionReader = decompressNoContextTakeover
 	}
 
+	if err = c.acquireWriteBuf(); err != nil {
+		netConn.Close()
+		return nil, err
+	}
+	defer c.releaseWriteBuf()
 	p := c.writeBuf[:0]
 	p = append(p, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "...)
 	p = append(p, computeAcceptKey(challengeKey)...)
