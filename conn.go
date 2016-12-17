@@ -238,6 +238,7 @@ type Conn struct {
 	newCompressionWriter   func(io.WriteCloser) (io.WriteCloser, error)
 
 	// Read fields
+	reader        io.ReadCloser // the current reader returned to the application
 	readErr       error
 	br            *bufio.Reader
 	readRemaining int64 // bytes remaining in current frame.
@@ -253,7 +254,7 @@ type Conn struct {
 	messageReader *messageReader // the current low-level reader
 
 	readDecompress         bool // whether last read frame had RSV1 set
-	newDecompressionReader func(io.Reader) io.Reader
+	newDecompressionReader func(io.Reader) io.ReadCloser
 }
 
 func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) *Conn {
@@ -855,6 +856,11 @@ func (c *Conn) handleProtocolError(message string) error {
 // permanent. Once this method returns a non-nil error, all subsequent calls to
 // this method return the same error.
 func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
+	// Close previous reader, only relevant for decompression.
+	if c.reader != nil {
+		c.reader.Close()
+		c.reader = nil
+	}
 
 	c.messageReader = nil
 	c.readLength = 0
@@ -867,11 +873,11 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 		}
 		if frameType == TextMessage || frameType == BinaryMessage {
 			c.messageReader = &messageReader{c}
-			var r io.Reader = c.messageReader
+			c.reader = c.messageReader
 			if c.readDecompress {
-				r = c.newDecompressionReader(r)
+				c.reader = c.newDecompressionReader(c.reader)
 			}
-			return frameType, r, nil
+			return frameType, c.reader, nil
 		}
 	}
 
@@ -931,6 +937,10 @@ func (r *messageReader) Read(b []byte) (int, error) {
 		err = errUnexpectedEOF
 	}
 	return 0, err
+}
+
+func (r *messageReader) Close() error {
+	return nil
 }
 
 // ReadMessage is a helper method for getting a reader using NextReader and
