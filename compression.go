@@ -13,8 +13,13 @@ import (
 )
 
 var (
-	flateWriterPool = sync.Pool{}
-	flateReaderPool = sync.Pool{}
+	flateWriterPool = sync.Pool{New: func() interface{} {
+		fw, _ := flate.NewWriter(nil, 3)
+		return fw
+	}}
+	flateReaderPool = sync.Pool{New: func() interface{} {
+		return flate.NewReader(nil)
+	}}
 )
 
 func decompressNoContextTakeover(r io.Reader) io.ReadCloser {
@@ -24,26 +29,16 @@ func decompressNoContextTakeover(r io.Reader) io.ReadCloser {
 		// Add final block to squelch unexpected EOF error from flate reader.
 		"\x01\x00\x00\xff\xff"
 
-	i := flateReaderPool.Get()
-	if i == nil {
-		i = flate.NewReader(nil)
-	}
-	i.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), nil)
-	return &flateReadWrapper{i.(io.ReadCloser)}
+	fr, _ := flateReaderPool.Get().(io.ReadCloser)
+	fr.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), nil)
+	return &flateReadWrapper{fr}
 }
 
-func compressNoContextTakeover(w io.WriteCloser) (io.WriteCloser, error) {
+func compressNoContextTakeover(w io.WriteCloser) io.WriteCloser {
 	tw := &truncWriter{w: w}
-	i := flateWriterPool.Get()
-	var fw *flate.Writer
-	var err error
-	if i == nil {
-		fw, err = flate.NewWriter(tw, 3)
-	} else {
-		fw = i.(*flate.Writer)
-		fw.Reset(tw)
-	}
-	return &flateWriteWrapper{fw: fw, tw: tw}, err
+	fw, _ := flateWriterPool.Get().(*flate.Writer)
+	fw.Reset(tw)
+	return &flateWriteWrapper{fw: fw, tw: tw}
 }
 
 // truncWriter is an io.Writer that writes all but the last four bytes of the

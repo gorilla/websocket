@@ -235,7 +235,7 @@ type Conn struct {
 	writeErr   error
 
 	enableWriteCompression bool
-	newCompressionWriter   func(io.WriteCloser) (io.WriteCloser, error)
+	newCompressionWriter   func(io.WriteCloser) io.WriteCloser
 
 	// Read fields
 	reader        io.ReadCloser // the current reader returned to the application
@@ -444,11 +444,7 @@ func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
 	}
 	c.writer = mw
 	if c.newCompressionWriter != nil && c.enableWriteCompression && isData(messageType) {
-		w, err := c.newCompressionWriter(c.writer)
-		if err != nil {
-			c.writer = nil
-			return nil, err
-		}
+		w := c.newCompressionWriter(c.writer)
 		mw.compress = true
 		c.writer = w
 	}
