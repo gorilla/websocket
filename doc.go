@@ -150,7 +150,7 @@
 // application's responsibility to check the Origin header before calling
 // Upgrade.
 //
-// Compression [Experimental]
+// Compression
 //
 // Per message compression extensions (RFC 7692) are experimentally supported
 // by this package in a limited capacity. Setting the EnableCompression option
@@ -162,7 +162,7 @@
 // Per message compression of messages written to a connection can be enabled
 // or disabled by calling the corresponding Conn method:
 //
-// conn.EnableWriteCompression(true)
+//  conn.EnableWriteCompression(true)
 //
 // Currently this package does not support compression with "context takeover".
 // This means that messages must be compressed and decompressed in isolation,
