@@ -292,6 +292,11 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) 
 	return c
 }
 
+func (c *Conn) SetDeadline(t time.Time) error {
+	c.writeDeadline = t
+	return c.conn.SetDeadline(t)
+}
+
 // Subprotocol returns the negotiated protocol for the connection.
 func (c *Conn) Subprotocol() string {
 	return c.subprotocol
