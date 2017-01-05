@@ -292,6 +292,8 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) 
 	return c
 }
 
+// SetDeadline sets the read and write deadline on the underlying network connection
+// It is equivalent to calling both SetReadDeadline and SetWriteDeadline.
 func (c *Conn) SetDeadline(t time.Time) error {
 	c.writeDeadline = t
 	return c.conn.SetDeadline(t)
