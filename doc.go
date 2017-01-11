@@ -150,7 +150,7 @@
 // application's responsibility to check the Origin header before calling
 // Upgrade.
 //
-// Compression
+// Compression EXPERIMENTAL
 //
 // Per message compression extensions (RFC 7692) are experimentally supported
 // by this package in a limited capacity. Setting the EnableCompression option
