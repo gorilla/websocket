@@ -118,9 +118,10 @@
 //
 // Applications are responsible for ensuring that no more than one goroutine
 // calls the write methods (NextWriter, SetWriteDeadline, WriteMessage,
-// WriteJSON) concurrently and that no more than one goroutine calls the read
-// methods (NextReader, SetReadDeadline, ReadMessage, ReadJSON, SetPongHandler,
-// SetPingHandler) concurrently.
+// WriteJSON, EnableWriteCompression, SetCompressionLevel) concurrently and
+// that no more than one goroutine calls the read methods (NextReader,
+// SetReadDeadline, ReadMessage, ReadJSON, SetPongHandler, SetPingHandler)
+// concurrently.
 //
 // The Close and WriteControl methods can be called concurrently with all other
 // methods.

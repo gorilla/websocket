@@ -241,7 +241,8 @@ type Conn struct {
 	writeErr   error
 
 	enableWriteCompression bool
-	newCompressionWriter   func(io.WriteCloser) io.WriteCloser
+	compressionLevel       int
+	newCompressionWriter   func(io.WriteCloser, int) io.WriteCloser
 
 	// Read fields
 	reader        io.ReadCloser // the current reader returned to the application
@@ -285,6 +286,7 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) 
 		readFinal:              true,
 		writeBuf:               make([]byte, writeBufferSize+maxFrameHeaderSize),
 		enableWriteCompression: true,
+		compressionLevel:       defaultCompressionLevel,
 	}
 	c.SetCloseHandler(nil)
 	c.SetPingHandler(nil)
@@ -450,7 +452,7 @@ func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
 	}
 	c.writer = mw
 	if c.newCompressionWriter != nil && c.enableWriteCompression && isData(messageType) {
-		w := c.newCompressionWriter(c.writer)
+		w := c.newCompressionWriter(c.writer, c.compressionLevel)
 		mw.compress = true
 		c.writer = w
 	}
@@ -1059,6 +1061,20 @@ func (c *Conn) UnderlyingConn() net.Conn {
 // compression was not negotiated with the peer.
 func (c *Conn) EnableWriteCompression(enable bool) {
 	c.enableWriteCompression = enable
+}
+
+// SetCompressionLevel sets the flate compression level for subsequent text and
+// binary messages. This function is a noop if compression was not negotiated
+// with the peer. Valid levels range from -2 to 9. Level -1 uses the default
+// compression level. Level -2 uses Huffman compression only, Level 0 does not
+// attempt any compression. Levels 1 through 9 range from best speed to best
+// compression.
+func (c *Conn) SetCompressionLevel(level int) error {
+	if !isValidCompressionLevel(level) {
+		return errors.New("websocket: invalid compression level")
+	}
+	c.compressionLevel = level
+	return nil
 }
 
 // FormatCloseMessage formats closeCode and text as a WebSocket close message.

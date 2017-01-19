@@ -64,3 +64,17 @@ func BenchmarkWriteWithCompression(b *testing.B) {
 	}
 	b.ReportAllocs()
 }
+
+func TestValidCompressionLevel(t *testing.T) {
+	c := newConn(fakeNetConn{}, false, 1024, 1024)
+	for _, level := range []int{minCompressionLevel - 1, maxCompressionLevel + 1} {
+		if err := c.SetCompressionLevel(level); err == nil {
+			t.Errorf("no error for level %d", level)
+		}
+	}
+	for _, level := range []int{minCompressionLevel, maxCompressionLevel} {
+		if err := c.SetCompressionLevel(level); err != nil {
+			t.Errorf("error for level %d", level)
+		}
+	}
+}
