@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	minCompressionLevel     = -2 // flate.HuffmanOnly
+	minCompressionLevel     = -2 // flate.HuffmanOnly not defined in Go < 1.6
 	maxCompressionLevel     = flate.BestCompression
 	defaultCompressionLevel = 1
 )
