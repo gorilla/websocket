@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	minCompressionLevel     = flate.HuffmanOnly
+	minCompressionLevel     = -2 // flate.HuffmanOnly
 	maxCompressionLevel     = flate.BestCompression
 	defaultCompressionLevel = 1
 )
