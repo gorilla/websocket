@@ -6,6 +6,7 @@ package websocket
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -659,12 +660,138 @@ func (w *messageWriter) Close() error {
 	return nil
 }
 
+// PreparedMessage allows to prepare message to be sent into connections
+// using WritePreparedMessage method. By doing so, you can avoid the overhead
+// of framing the same payload into WebSocket messages multiple times when
+// that same payload is to be sent out on multiple connections - i.e. PUB/SUB
+// scenarios with many active subscribers.
+// This is especially useful when compression is used as permessage compression
+// is pretty CPU and memory expensive.
+type PreparedMessage struct {
+	messageType       int
+	compression       bool
+	compressionLevel  int
+	payload           []byte
+	compressedPayload []byte
+}
+
+// netConn is a fake connection to be used to get PreparedMessage prebuilt payloads.
+// TODO: this is a simplest solution I've found. Is it hacky? Better to refactor a package in some way?
+type netConn struct {
+	io.Reader
+	io.Writer
+}
+
+// netAddr is a fake net.Addr implementation to be used in netConn.
+type netAddr int
+
+func (a netAddr) Network() string { return "" }
+func (a netAddr) String() string  { return "" }
+
+func (c netConn) Close() error                       { return nil }
+func (c netConn) LocalAddr() net.Addr                { return netAddr(0) }
+func (c netConn) RemoteAddr() net.Addr               { return netAddr(0) }
+func (c netConn) SetDeadline(t time.Time) error      { return nil }
+func (c netConn) SetReadDeadline(t time.Time) error  { return nil }
+func (c netConn) SetWriteDeadline(t time.Time) error { return nil }
+
+var (
+	preparingServerConnPool = sync.Pool{New: func() interface{} {
+		var buf bytes.Buffer
+		return newConn(&netConn{Reader: nil, Writer: &buf}, true, 0, 0)
+	}}
+	preparingClientConnPool = sync.Pool{New: func() interface{} {
+		var buf bytes.Buffer
+		return newConn(&netConn{Reader: nil, Writer: &buf}, false, 0, 0)
+	}}
+)
+
+// NewPreparedMessage returns ready to use PreparedMessage with uncompressed (always)
+// and compressed (only if compression flag is true) prebuilt payloads.
+// TODO: client or server message? Options as last argument (with compression level only at moment).
+func NewPreparedMessage(messageType int, data []byte, compression bool, compressionLevel int) (*PreparedMessage, error) {
+	m := &PreparedMessage{messageType: messageType}
+
+	c := preparingServerConnPool.Get().(*Conn)
+	defer func() {
+		c.conn.(*netConn).Writer.(*bytes.Buffer).Reset()
+		c.enableWriteCompression = false
+		c.newCompressionWriter = nil
+		preparingServerConnPool.Put(c)
+	}()
+
+	w, err := c.NextWriter(messageType)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = w.Write(data); err != nil {
+		return nil, err
+	}
+	err = w.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	// We always need uncompressed payload because even if application enables
+	// compression we can't guarantee it will be negotiated with client.
+	m.payload = c.conn.(*netConn).Writer.(*bytes.Buffer).Bytes()
+
+	if compression {
+		// Create compressed payload only if application uses compression.
+
+		m.compression = true
+		m.compressionLevel = compressionLevel
+
+		c.conn.(*netConn).Writer.(*bytes.Buffer).Reset()
+		c.enableWriteCompression = true
+		c.newCompressionWriter = compressNoContextTakeover
+		c.SetCompressionLevel(compressionLevel)
+
+		w, err = c.NextWriter(messageType)
+		if err != nil {
+			return nil, err
+		}
+		if _, err = w.Write(data); err != nil {
+			return nil, err
+		}
+		err = w.Close()
+		if err != nil {
+			return nil, err
+		}
+		m.compressedPayload = c.conn.(*netConn).Writer.(*bytes.Buffer).Bytes()
+	}
+
+	return m, nil
+}
+
+// WritePreparedMessage writes prepared message into connection.
+func (c *Conn) WritePreparedMessage(msg *PreparedMessage) error {
+
+	if c.isWriting {
+		panic("concurrent write to websocket connection")
+	}
+	c.isWriting = true
+
+	var err error
+	if c.newCompressionWriter != nil && c.enableWriteCompression && isData(msg.messageType) {
+		err = c.write(msg.messageType, c.writeDeadline, msg.compressedPayload)
+	} else {
+		err = c.write(msg.messageType, c.writeDeadline, msg.payload)
+	}
+
+	if !c.isWriting {
+		panic("concurrent write to websocket connection")
+	}
+	c.isWriting = false
+
+	return err
+}
+
 // WriteMessage is a helper method for getting a writer using NextWriter,
 // writing the message and closing the writer.
 func (c *Conn) WriteMessage(messageType int, data []byte) error {
 
 	if c.isServer && (c.newCompressionWriter == nil || !c.enableWriteCompression) {
-
 		// Fast path with no allocations and single frame.
 
 		if err := c.prepWrite(messageType); err != nil {
