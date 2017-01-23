@@ -104,23 +104,23 @@ func (u *Upgrader) selectSubprotocol(r *http.Request, responseHeader http.Header
 // response.
 func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*Conn, error) {
 	if r.Method != "GET" {
-		return u.returnError(w, r, http.StatusMethodNotAllowed, "websocket: method not GET")
+		return u.returnError(w, r, http.StatusMethodNotAllowed, "websocket: not a websocket handshake: request method is not GET")
 	}
 
 	if _, ok := responseHeader["Sec-Websocket-Extensions"]; ok {
-		return u.returnError(w, r, http.StatusInternalServerError, "websocket: application specific Sec-Websocket-Extensions headers are unsupported")
-	}
-
-	if !tokenListContainsValue(r.Header, "Sec-Websocket-Version", "13") {
-		return u.returnError(w, r, http.StatusBadRequest, "websocket: version != 13")
+		return u.returnError(w, r, http.StatusInternalServerError, "websocket: application specific 'Sec-Websocket-Extensions' headers are unsupported")
 	}
 
 	if !tokenListContainsValue(r.Header, "Connection", "upgrade") {
-		return u.returnError(w, r, http.StatusBadRequest, "websocket: could not find connection header with token 'upgrade'")
+		return u.returnError(w, r, http.StatusBadRequest, "websocket: not a websocket handshake: 'upgrade' token not found in 'Connection' header")
 	}
 
 	if !tokenListContainsValue(r.Header, "Upgrade", "websocket") {
-		return u.returnError(w, r, http.StatusBadRequest, "websocket: could not find upgrade header with token 'websocket'")
+		return u.returnError(w, r, http.StatusBadRequest, "websocket: not a websocket handshake: 'websocket' token not found in 'Upgrade' header")
+	}
+
+	if !tokenListContainsValue(r.Header, "Sec-Websocket-Version", "13") {
+		return u.returnError(w, r, http.StatusBadRequest, "websocket: unsupported version: 13 not found in 'Sec-Websocket-Version' header")
 	}
 
 	checkOrigin := u.CheckOrigin
@@ -128,12 +128,12 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		checkOrigin = checkSameOrigin
 	}
 	if !checkOrigin(r) {
-		return u.returnError(w, r, http.StatusForbidden, "websocket: origin not allowed")
+		return u.returnError(w, r, http.StatusForbidden, "websocket: 'Origin' header value not allowed")
 	}
 
 	challengeKey := r.Header.Get("Sec-Websocket-Key")
 	if challengeKey == "" {
-		return u.returnError(w, r, http.StatusBadRequest, "websocket: key missing or blank")
+		return u.returnError(w, r, http.StatusBadRequest, "websocket: not a websocket handshake: `Sec-Websocket-Key' header is missing or blank")
 	}
 
 	subprotocol := u.selectSubprotocol(r, responseHeader)
