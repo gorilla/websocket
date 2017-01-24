@@ -41,28 +41,6 @@ func textMessages(num int) [][]byte {
 	return messages
 }
 
-func TestCompressNoContextTakeover(t *testing.T) {
-	for level := minCompressionLevel; level <= maxCompressionLevel; level++ {
-		message := textMessages(1)[0]
-		c := fakeNetConn{Reader: nil, Writer: ioutil.Discard}
-		f := compressNoContextTakeover(c, level)
-		n, err := f.Write(message)
-		if err != nil {
-			t.Errorf("Error writing using compressNoContextTakeover on level %d: %v", level, err)
-			return
-		}
-		if n != len(message) {
-			t.Errorf("Error writing using compressNoContextTakeover on level %d: not enough bytes written", level)
-			return
-		}
-		err = f.Close()
-		if err != nil {
-			t.Errorf("Error closing writer on level %d: %v", level, err)
-			return
-		}
-	}
-}
-
 func BenchmarkWriteNoCompression(b *testing.B) {
 	w := ioutil.Discard
 	c := newConn(fakeNetConn{Reader: nil, Writer: w}, false, 1024, 1024)
