@@ -19,7 +19,7 @@ const (
 )
 
 var (
-	flateWriterPools [maxCompressionLevel - minCompressionLevel]sync.Pool
+	flateWriterPools [maxCompressionLevel - minCompressionLevel + 1]sync.Pool
 	flateReaderPool  = sync.Pool{New: func() interface{} {
 		return flate.NewReader(nil)
 	}}
