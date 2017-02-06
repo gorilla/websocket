@@ -620,9 +620,9 @@ func BenchmarkBroadcastNoCompressionPrepared(b *testing.B) {
 	for j := 0; j < b.N; j++ {
 		for i := 0; i < bench.numMessages; i++ {
 			msg := bench.messages[i%len(bench.messages)]
-			preparedMsg := NewPreparedMessage(TextMessage, msg)
+			pm, _ := NewPreparedMessage(TextMessage, msg)
 			for _, c := range conns {
-				c.messages <- preparedMsg
+				c.messages <- pm
 			}
 		}
 		<-bench.tick
@@ -638,67 +638,13 @@ func BenchmarkBroadcastWithCompressionPrepared(b *testing.B) {
 	for j := 0; j < b.N; j++ {
 		for i := 0; i < bench.numMessages; i++ {
 			msg := bench.messages[i%len(bench.messages)]
-			preparedMsg := NewPreparedMessage(TextMessage, msg)
+			pm, _ := NewPreparedMessage(TextMessage, msg)
 			for _, c := range conns {
-				c.messages <- preparedMsg
+				c.messages <- pm
 			}
 		}
 		<-bench.tick
 	}
 	b.ReportAllocs()
 	close(bench.done)
-}
-
-func TestPreparedMessageBytesStreamUncompressed(t *testing.T) {
-	messages := textMessages(100)
-
-	var b1 bytes.Buffer
-	c := newConn(fakeNetConn{Reader: nil, Writer: &b1}, true, 1024, 1024)
-	for _, msg := range messages {
-		preparedMsg := NewPreparedMessage(TextMessage, msg)
-		c.WritePreparedMessage(preparedMsg)
-	}
-	out1 := b1.Bytes()
-
-	var b2 bytes.Buffer
-	c = newConn(fakeNetConn{Reader: nil, Writer: &b2}, true, 1024, 1024)
-	for _, msg := range messages {
-		c.WriteMessage(TextMessage, msg)
-	}
-	out2 := b2.Bytes()
-
-	if !reflect.DeepEqual(out1, out2) {
-		t.Errorf("Connection bytes stream must be equal when using preparing message and not")
-	}
-}
-
-func TestPreparedMessageBytesStreamCompressed(t *testing.T) {
-	messages := textMessages(100)
-
-	var b1 bytes.Buffer
-	c := newConn(fakeNetConn{Reader: nil, Writer: &b1}, true, 1024, 1024)
-	c.enableWriteCompression = true
-	c.newCompressionWriter = compressNoContextTakeover
-	for i, msg := range messages {
-		preparedMsg := NewPreparedMessage(TextMessage, msg)
-		level := i%(maxCompressionLevel-minCompressionLevel+1) - 2
-		c.SetCompressionLevel(level)
-		c.WritePreparedMessage(preparedMsg)
-	}
-	out1 := b1.Bytes()
-
-	var b2 bytes.Buffer
-	c = newConn(fakeNetConn{Reader: nil, Writer: &b2}, true, 1024, 1024)
-	c.enableWriteCompression = true
-	c.newCompressionWriter = compressNoContextTakeover
-	for i, msg := range messages {
-		level := i%(maxCompressionLevel-minCompressionLevel+1) - 2
-		c.SetCompressionLevel(level)
-		c.WriteMessage(TextMessage, msg)
-	}
-	out2 := b2.Bytes()
-
-	if !reflect.DeepEqual(out1, out2) {
-		t.Errorf("Connection bytes stream must be equal when using preparing message and not")
-	}
 }
