@@ -465,186 +465,113 @@ func TestFailedConnectionReadPanic(t *testing.T) {
 	t.Fatal("should not get here")
 }
 
-type testConn struct {
-	conn     *Conn
-	messages chan []byte
-}
-
-func newTestConn(c *Conn, bufferSize int) *testConn {
-	return &testConn{
-		conn:     c,
-		messages: make(chan []byte, bufferSize),
-	}
-}
-
-type testPreparedConn struct {
-	conn     *Conn
-	messages chan *PreparedMessage
-}
-
-func newTestPreparedConn(c *Conn, bufferSize int) *testPreparedConn {
-	return &testPreparedConn{
-		conn:     c,
-		messages: make(chan *PreparedMessage, bufferSize),
-	}
-}
-
-const (
-	testBroadcastNumConns             = 10000
-	testBroadcastNumMessages          = 1
-	testBroadcastConnBufferSize       = 256
-	testBroadcastNumDifferentMessages = 100
-)
-
-// broadcastBench contains all common fields and methods to run broadcast
-// benchmarks below. In every broadcast benchmark we start many connections
-// (testBroadcastNumConns) and then broadcast testBroadcastNumMessages
-// messages to every connection. This simulates an application where many
-// connections listen to the same data - i.e. PUB/SUB scenarios with many
-// subscribers.
+// broadcastBench allows to run broadcast benchmarks.
+// In every broadcast benchmark we create many connections, then broadcast message
+// to every connection and wait for all writes complete. This emulates an application
+// where many connections listen to the same data - i.e. PUB/SUB scenarios with many
+// subscribers in one channel.
 type broadcastBench struct {
 	w           io.Writer
-	numConns    int
-	numMessages int
-	messages    [][]byte
-	done        chan struct{}
-	tick        chan struct{}
+	message     *broadcastMessage
+	closeCh     chan struct{}
+	doneCh      chan struct{}
 	count       int32
+	conns       []*broadcastConn
+	compression bool
+	usePrepared bool
 }
 
-func newBroadcastBench() *broadcastBench {
-	return &broadcastBench{
+type broadcastMessage struct {
+	payload  []byte
+	prepared *PreparedMessage
+}
+
+type broadcastConn struct {
+	conn  *Conn
+	msgCh chan *broadcastMessage
+}
+
+func newBroadcastConn(c *Conn) *broadcastConn {
+	return &broadcastConn{
+		conn:  c,
+		msgCh: make(chan *broadcastMessage, 1),
+	}
+}
+
+func newBroadcastBench(usePrepared, compression bool) *broadcastBench {
+	bench := &broadcastBench{
 		w:           ioutil.Discard,
-		numConns:    testBroadcastNumConns,
-		numMessages: testBroadcastNumMessages,
-		messages:    textMessages(testBroadcastNumDifferentMessages),
-		done:        make(chan struct{}),
-		tick:        make(chan struct{}),
+		doneCh:      make(chan struct{}),
+		closeCh:     make(chan struct{}),
+		usePrepared: usePrepared,
+		compression: compression,
 	}
+	bm := &broadcastMessage{
+		payload: textMessages(1)[0],
+	}
+	if usePrepared {
+		pm, _ := NewPreparedMessage(TextMessage, bm.payload)
+		bm.prepared = pm
+	}
+	bench.message = bm
+	bench.makeConns(10000)
+	return bench
 }
 
-func (b *broadcastBench) makeConns(withCompression bool) []*testConn {
-	conns := make([]*testConn, b.numConns)
+func (b *broadcastBench) makeConns(numConns int) {
+	conns := make([]*broadcastConn, numConns)
 
-	for i := 0; i < b.numConns; i++ {
+	for i := 0; i < numConns; i++ {
 		c := newConn(fakeNetConn{Reader: nil, Writer: b.w}, true, 1024, 1024)
-		if withCompression {
+		if b.compression {
 			c.enableWriteCompression = true
 			c.newCompressionWriter = compressNoContextTakeover
 		}
-		conns[i] = newTestConn(c, b.numMessages)
-		go func(c *testConn) {
+		conns[i] = newBroadcastConn(c)
+		go func(c *broadcastConn) {
 			for {
 				select {
-				case msg := <-c.messages:
-					c.conn.WriteMessage(TextMessage, msg)
-					val := atomic.AddInt32(&b.count, 1)
-					if val%int32(b.numConns*b.numMessages) == 0 {
-						b.tick <- struct{}{}
+				case msg := <-c.msgCh:
+					if b.usePrepared {
+						c.conn.WritePreparedMessage(msg.prepared)
+					} else {
+						c.conn.WriteMessage(TextMessage, msg.payload)
 					}
-				case <-b.done:
+					val := atomic.AddInt32(&b.count, 1)
+					if val%int32(numConns) == 0 {
+						b.doneCh <- struct{}{}
+					}
+				case <-b.closeCh:
 					return
 				}
 			}
 		}(conns[i])
 	}
-	return conns
+	b.conns = conns
 }
 
-func (b *broadcastBench) makePreparedConns(withCompression bool) []*testPreparedConn {
-	conns := make([]*testPreparedConn, b.numConns)
+func (b *broadcastBench) close() {
+	close(b.closeCh)
+}
 
-	for i := 0; i < b.numConns; i++ {
-		c := newConn(fakeNetConn{Reader: nil, Writer: b.w}, true, 1024, 1024)
-		if withCompression {
-			c.enableWriteCompression = true
-			c.newCompressionWriter = compressNoContextTakeover
-		}
-		conns[i] = newTestPreparedConn(c, b.numMessages)
-		go func(c *testPreparedConn) {
-			for {
-				select {
-				case msg := <-c.messages:
-					c.conn.WritePreparedMessage(msg)
-					val := atomic.AddInt32(&b.count, 1)
-					if val%int32(b.numConns*b.numMessages) == 0 {
-						b.tick <- struct{}{}
-					}
-				case <-b.done:
-					return
-				}
-			}
-		}(conns[i])
+func (b *broadcastBench) runOnce() {
+	for _, c := range b.conns {
+		c.msgCh <- b.message
 	}
-	return conns
+	<-b.doneCh
 }
 
-func BenchmarkBroadcastNoCompression(b *testing.B) {
-	bench := newBroadcastBench()
-	conns := bench.makeConns(false)
+func benchmarkBroadcast(b *testing.B, usePrepared, compression bool) {
+	bench := newBroadcastBench(usePrepared, compression)
+	defer bench.close()
 	b.ResetTimer()
 	for j := 0; j < b.N; j++ {
-		for i := 0; i < bench.numMessages; i++ {
-			msg := bench.messages[i%len(bench.messages)]
-			for _, c := range conns {
-				c.messages <- msg
-			}
-		}
-		<-bench.tick
+		bench.runOnce()
 	}
 	b.ReportAllocs()
-	close(bench.done)
 }
 
-func BenchmarkBroadcastWithCompression(b *testing.B) {
-	bench := newBroadcastBench()
-	conns := bench.makeConns(true)
-	b.ResetTimer()
-	for j := 0; j < b.N; j++ {
-		for i := 0; i < bench.numMessages; i++ {
-			msg := bench.messages[i%len(bench.messages)]
-			for _, c := range conns {
-				c.messages <- msg
-			}
-		}
-		<-bench.tick
-	}
-	b.ReportAllocs()
-	close(bench.done)
-}
-
-func BenchmarkBroadcastNoCompressionPrepared(b *testing.B) {
-	bench := newBroadcastBench()
-	conns := bench.makePreparedConns(false)
-	b.ResetTimer()
-	for j := 0; j < b.N; j++ {
-		for i := 0; i < bench.numMessages; i++ {
-			msg := bench.messages[i%len(bench.messages)]
-			pm, _ := NewPreparedMessage(TextMessage, msg)
-			for _, c := range conns {
-				c.messages <- pm
-			}
-		}
-		<-bench.tick
-	}
-	b.ReportAllocs()
-	close(bench.done)
-}
-
-func BenchmarkBroadcastWithCompressionPrepared(b *testing.B) {
-	bench := newBroadcastBench()
-	conns := bench.makePreparedConns(false)
-	b.ResetTimer()
-	for j := 0; j < b.N; j++ {
-		for i := 0; i < bench.numMessages; i++ {
-			msg := bench.messages[i%len(bench.messages)]
-			pm, _ := NewPreparedMessage(TextMessage, msg)
-			for _, c := range conns {
-				c.messages <- pm
-			}
-		}
-		<-bench.tick
-	}
-	b.ReportAllocs()
-	close(bench.done)
-}
+func BenchmarkBroadcastNoCompression(b *testing.B)           { benchmarkBroadcast(b, false, false) }
+func BenchmarkBroadcastWithCompression(b *testing.B)         { benchmarkBroadcast(b, false, true) }
+func BenchmarkBroadcastNoCompressionPrepared(b *testing.B)   { benchmarkBroadcast(b, true, false) }
+func BenchmarkBroadcastWithCompressionPrepared(b *testing.B) { benchmarkBroadcast(b, true, true) }
