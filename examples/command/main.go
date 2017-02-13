@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"text/template"
+	"html/template"
 	"time"
 
 	"github.com/gorilla/websocket"

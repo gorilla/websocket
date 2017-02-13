@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"text/template"
+	"html/template"
 	"time"
 
 	"github.com/gorilla/websocket"
