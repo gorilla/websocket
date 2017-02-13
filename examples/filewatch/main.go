@@ -7,7 +7,7 @@ package main
 import (
 	"flag"
 	"html/template"
-	"io/ioutil"	
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
