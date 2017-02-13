@@ -7,12 +7,12 @@ package main
 import (
 	"bufio"
 	"flag"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
-	"html/template"
 	"time"
 
 	"github.com/gorilla/websocket"

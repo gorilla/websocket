@@ -6,12 +6,12 @@ package main
 
 import (
 	"flag"
-	"io/ioutil"
+	"html/template"
+	"io/ioutil"	
 	"log"
 	"net/http"
 	"os"
 	"strconv"
-	"html/template"
 	"time"
 
 	"github.com/gorilla/websocket"
