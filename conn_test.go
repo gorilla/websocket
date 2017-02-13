@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"testing/iotest"
 	"time"
@@ -462,4 +463,242 @@ func TestFailedConnectionReadPanic(t *testing.T) {
 		c.ReadMessage()
 	}
 	t.Fatal("should not get here")
+}
+
+type testConn struct {
+	conn     *Conn
+	messages chan []byte
+}
+
+func newTestConn(c *Conn, bufferSize int) *testConn {
+	return &testConn{
+		conn:     c,
+		messages: make(chan []byte, bufferSize),
+	}
+}
+
+type testPreparedConn struct {
+	conn     *Conn
+	messages chan *PreparedMessage
+}
+
+func newTestPreparedConn(c *Conn, bufferSize int) *testPreparedConn {
+	return &testPreparedConn{
+		conn:     c,
+		messages: make(chan *PreparedMessage, bufferSize),
+	}
+}
+
+const (
+	testBroadcastNumConns             = 10000
+	testBroadcastNumMessages          = 1
+	testBroadcastConnBufferSize       = 256
+	testBroadcastNumDifferentMessages = 100
+)
+
+// broadcastBench contains all common fields and methods to run broadcast
+// benchmarks below. In every broadcast benchmark we start many connections
+// (testBroadcastNumConns) and then broadcast testBroadcastNumMessages
+// messages to every connection. This simulates an application where many
+// connections listen to the same data - i.e. PUB/SUB scenarios with many
+// subscribers.
+type broadcastBench struct {
+	w           io.Writer
+	numConns    int
+	numMessages int
+	messages    [][]byte
+	done        chan struct{}
+	tick        chan struct{}
+	count       int32
+}
+
+func newBroadcastBench() *broadcastBench {
+	return &broadcastBench{
+		w:           ioutil.Discard,
+		numConns:    testBroadcastNumConns,
+		numMessages: testBroadcastNumMessages,
+		messages:    textMessages(testBroadcastNumDifferentMessages),
+		done:        make(chan struct{}),
+		tick:        make(chan struct{}),
+	}
+}
+
+func (b *broadcastBench) makeConns(withCompression bool) []*testConn {
+	conns := make([]*testConn, b.numConns)
+
+	for i := 0; i < b.numConns; i++ {
+		c := newConn(fakeNetConn{Reader: nil, Writer: b.w}, true, 1024, 1024)
+		if withCompression {
+			c.enableWriteCompression = true
+			c.newCompressionWriter = compressNoContextTakeover
+		}
+		conns[i] = newTestConn(c, b.numMessages)
+		go func(c *testConn) {
+			for {
+				select {
+				case msg := <-c.messages:
+					c.conn.WriteMessage(TextMessage, msg)
+					val := atomic.AddInt32(&b.count, 1)
+					if val%int32(b.numConns*b.numMessages) == 0 {
+						b.tick <- struct{}{}
+					}
+				case <-b.done:
+					return
+				}
+			}
+		}(conns[i])
+	}
+	return conns
+}
+
+func (b *broadcastBench) makePreparedConns(withCompression bool) []*testPreparedConn {
+	conns := make([]*testPreparedConn, b.numConns)
+
+	for i := 0; i < b.numConns; i++ {
+		c := newConn(fakeNetConn{Reader: nil, Writer: b.w}, true, 1024, 1024)
+		if withCompression {
+			c.enableWriteCompression = true
+			c.newCompressionWriter = compressNoContextTakeover
+		}
+		conns[i] = newTestPreparedConn(c, b.numMessages)
+		go func(c *testPreparedConn) {
+			for {
+				select {
+				case msg := <-c.messages:
+					c.conn.WritePreparedMessage(msg)
+					val := atomic.AddInt32(&b.count, 1)
+					if val%int32(b.numConns*b.numMessages) == 0 {
+						b.tick <- struct{}{}
+					}
+				case <-b.done:
+					return
+				}
+			}
+		}(conns[i])
+	}
+	return conns
+}
+
+func BenchmarkBroadcastNoCompression(b *testing.B) {
+	bench := newBroadcastBench()
+	conns := bench.makeConns(false)
+	b.ResetTimer()
+	for j := 0; j < b.N; j++ {
+		for i := 0; i < bench.numMessages; i++ {
+			msg := bench.messages[i%len(bench.messages)]
+			for _, c := range conns {
+				c.messages <- msg
+			}
+		}
+		<-bench.tick
+	}
+	b.ReportAllocs()
+	close(bench.done)
+}
+
+func BenchmarkBroadcastWithCompression(b *testing.B) {
+	bench := newBroadcastBench()
+	conns := bench.makeConns(true)
+	b.ResetTimer()
+	for j := 0; j < b.N; j++ {
+		for i := 0; i < bench.numMessages; i++ {
+			msg := bench.messages[i%len(bench.messages)]
+			for _, c := range conns {
+				c.messages <- msg
+			}
+		}
+		<-bench.tick
+	}
+	b.ReportAllocs()
+	close(bench.done)
+}
+
+func BenchmarkBroadcastNoCompressionPrepared(b *testing.B) {
+	bench := newBroadcastBench()
+	conns := bench.makePreparedConns(false)
+	b.ResetTimer()
+	for j := 0; j < b.N; j++ {
+		for i := 0; i < bench.numMessages; i++ {
+			msg := bench.messages[i%len(bench.messages)]
+			preparedMsg := NewPreparedMessage(TextMessage, msg)
+			for _, c := range conns {
+				c.messages <- preparedMsg
+			}
+		}
+		<-bench.tick
+	}
+	b.ReportAllocs()
+	close(bench.done)
+}
+
+func BenchmarkBroadcastWithCompressionPrepared(b *testing.B) {
+	bench := newBroadcastBench()
+	conns := bench.makePreparedConns(false)
+	b.ResetTimer()
+	for j := 0; j < b.N; j++ {
+		for i := 0; i < bench.numMessages; i++ {
+			msg := bench.messages[i%len(bench.messages)]
+			preparedMsg := NewPreparedMessage(TextMessage, msg)
+			for _, c := range conns {
+				c.messages <- preparedMsg
+			}
+		}
+		<-bench.tick
+	}
+	b.ReportAllocs()
+	close(bench.done)
+}
+
+func TestPreparedMessageBytesStreamUncompressed(t *testing.T) {
+	messages := textMessages(100)
+
+	var b1 bytes.Buffer
+	c := newConn(fakeNetConn{Reader: nil, Writer: &b1}, true, 1024, 1024)
+	for _, msg := range messages {
+		preparedMsg := NewPreparedMessage(TextMessage, msg)
+		c.WritePreparedMessage(preparedMsg)
+	}
+	out1 := b1.Bytes()
+
+	var b2 bytes.Buffer
+	c = newConn(fakeNetConn{Reader: nil, Writer: &b2}, true, 1024, 1024)
+	for _, msg := range messages {
+		c.WriteMessage(TextMessage, msg)
+	}
+	out2 := b2.Bytes()
+
+	if !reflect.DeepEqual(out1, out2) {
+		t.Errorf("Connection bytes stream must be equal when using preparing message and not")
+	}
+}
+
+func TestPreparedMessageBytesStreamCompressed(t *testing.T) {
+	messages := textMessages(100)
+
+	var b1 bytes.Buffer
+	c := newConn(fakeNetConn{Reader: nil, Writer: &b1}, true, 1024, 1024)
+	c.enableWriteCompression = true
+	c.newCompressionWriter = compressNoContextTakeover
+	for i, msg := range messages {
+		preparedMsg := NewPreparedMessage(TextMessage, msg)
+		level := i%(maxCompressionLevel-minCompressionLevel+1) - 2
+		c.SetCompressionLevel(level)
+		c.WritePreparedMessage(preparedMsg)
+	}
+	out1 := b1.Bytes()
+
+	var b2 bytes.Buffer
+	c = newConn(fakeNetConn{Reader: nil, Writer: &b2}, true, 1024, 1024)
+	c.enableWriteCompression = true
+	c.newCompressionWriter = compressNoContextTakeover
+	for i, msg := range messages {
+		level := i%(maxCompressionLevel-minCompressionLevel+1) - 2
+		c.SetCompressionLevel(level)
+		c.WriteMessage(TextMessage, msg)
+	}
+	out2 := b2.Bytes()
+
+	if !reflect.DeepEqual(out1, out2) {
+		t.Errorf("Connection bytes stream must be equal when using preparing message and not")
+	}
 }
