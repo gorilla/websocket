@@ -83,6 +83,15 @@ type Dialer struct {
 	// If Jar is nil, cookies are not sent in requests and ignored
 	// in responses.
 	Jar http.CookieJar
+
+	// WriteBufferPool specifies a pool of buffers to use for write methods. A
+	// nil value will cause a buffer to be allocated per connection. It is
+	// recommended to use a buffer pool for applications that have a large number
+	// of connections and a modest volume of writes. The provided buffer pool
+	// must not implement a new value instatiator (e.g. Do not implement
+	// sync.Pool.New()), and must not be shared across connections that have
+	// different values of WriteBufferSize.
+	WriteBufferPool BufferPool
 }
 
 var errMalformedURL = errors.New("malformed ws or wss URL")
@@ -339,6 +348,7 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 	}
 
 	conn := newConn(netConn, false, d.ReadBufferSize, d.WriteBufferSize)
+	conn.writePool = d.WriteBufferPool
 
 	if err := req.Write(netConn); err != nil {
 		return nil, nil, err

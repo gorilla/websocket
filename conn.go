@@ -110,6 +110,12 @@ type CloseError struct {
 	Text string
 }
 
+// BufferPool represents a pool of buffers.
+type BufferPool interface {
+	Get() interface{}
+	Put(interface{})
+}
+
 func (e *CloseError) Error() string {
 	s := []byte("websocket: close ")
 	s = strconv.AppendInt(s, int64(e.Code), 10)
@@ -231,11 +237,13 @@ type Conn struct {
 	subprotocol string
 
 	// Write fields
-	mu            chan bool // used as mutex to protect write to conn
-	writeBuf      []byte    // frame is constructed in this buffer.
-	writeDeadline time.Time
-	writer        io.WriteCloser // the current writer returned to the application
-	isWriting     bool           // for best-effort concurrent write detection
+	mu              chan bool // used as mutex to protect write to conn
+	writeBuf        []byte    // frame is constructed in this buffer.
+	writeBufferSize int
+	writePool       BufferPool
+	writeDeadline   time.Time
+	writer          io.WriteCloser // the current writer returned to the application
+	isWriting       bool           // for best-effort concurrent write detection
 
 	writeErrMu sync.Mutex
 	writeErr   error
@@ -284,7 +292,7 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) 
 		conn:                   conn,
 		mu:                     mu,
 		readFinal:              true,
-		writeBuf:               make([]byte, writeBufferSize+maxFrameHeaderSize),
+		writeBufferSize:        writeBufferSize,
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
 	}
@@ -449,6 +457,9 @@ func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
 		c:         c,
 		frameType: messageType,
 		pos:       maxFrameHeaderSize,
+	}
+	if err := c.acquireWriteBuf(); err != nil {
+		return nil, err
 	}
 	c.writer = mw
 	if c.newCompressionWriter != nil && c.enableWriteCompression && isData(messageType) {
@@ -649,6 +660,7 @@ func (w *messageWriter) ReadFrom(r io.Reader) (nn int64, err error) {
 }
 
 func (w *messageWriter) Close() error {
+	defer w.c.releaseWriteBuf()
 	if w.err != nil {
 		return w.err
 	}
@@ -692,6 +704,9 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 			return err
 		}
 		mw := messageWriter{c: c, frameType: messageType, pos: maxFrameHeaderSize}
+		if err := c.acquireWriteBuf(); err != nil {
+			return err
+		}
 		n := copy(c.writeBuf[mw.pos:], data)
 		mw.pos += n
 		data = data[n:]
@@ -1102,4 +1117,30 @@ func FormatCloseMessage(closeCode int, text string) []byte {
 	binary.BigEndian.PutUint16(buf, uint16(closeCode))
 	copy(buf[2:], text)
 	return buf
+}
+
+func (c *Conn) acquireWriteBuf() error {
+	if c.writeBuf != nil {
+		return nil
+	}
+	n := c.writeBufferSize + maxFrameHeaderSize
+	if c.writePool != nil {
+		if i := c.writePool.Get(); i != nil {
+			p, ok := i.([]byte)
+			if !ok || len(p) != n {
+				return errors.New("bad value from write buffer pool")
+			}
+			c.writeBuf = p
+			return nil
+		}
+	}
+	c.writeBuf = make([]byte, n)
+	return nil
+}
+
+func (c *Conn) releaseWriteBuf() {
+	if c.writePool != nil && c.writeBuf != nil {
+		c.writePool.Put(c.writeBuf)
+		c.writeBuf = nil
+	}
 }
