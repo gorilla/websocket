@@ -60,7 +60,11 @@ func (u *Upgrader) returnError(w http.ResponseWriter, r *http.Request, status in
 		u.Error(w, r, status, err)
 	} else {
 		w.Header().Set("Sec-Websocket-Version", "13")
-		http.Error(w, reason, status)
+		if status == http.StatusBadRequest {
+			http.Error(w, reason, status)
+		} else {
+			http.Error(w, http.StatusText(status), status)
+		}
 	}
 	return nil, err
 }
