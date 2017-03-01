@@ -463,3 +463,17 @@ func TestFailedConnectionReadPanic(t *testing.T) {
 	}
 	t.Fatal("should not get here")
 }
+
+func TestBufioReaderReuse(t *testing.T) {
+	brw := bufio.NewReadWriter(bufio.NewReader(nil), nil)
+	c := newConnBRW(nil, false, 0, 0, brw)
+	if c.br != brw.Reader {
+		t.Error("connection did not reuse bufio.Reader")
+	}
+
+	brw = bufio.NewReadWriter(bufio.NewReaderSize(nil, 1234), nil) // size must not equal bufio.defaultBufSize
+	c = newConnBRW(nil, false, 0, 0, brw)
+	if c.br == brw.Reader {
+		t.Error("connection reuse bufio.Reader with wrong size")
+	}
+}
