@@ -279,7 +279,7 @@ func newConnBRW(conn net.Conn, isServer bool, readBufferSize, writeBufferSize in
 		readBufferSize = maxControlFramePayloadSize
 	}
 
-    // Reuse the supplied brw.Reader if brw.Reader's buf is the requested size.
+	// Reuse the supplied brw.Reader if brw.Reader's buf is the requested size.
 	var br *bufio.Reader
 	if brw != nil && brw.Reader != nil {
 		// This code assumes that peek on a reset reader returns
