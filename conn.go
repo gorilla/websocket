@@ -338,6 +338,13 @@ func newConnBRW(conn net.Conn, isServer bool, readBufferSize, writeBufferSize in
 	return c
 }
 
+// SetDeadline sets the read and write deadline on the underlying network connection
+// It is equivalent to calling both SetReadDeadline and SetWriteDeadline.
+func (c *Conn) SetDeadline(t time.Time) error {
+	c.writeDeadline = t
+	return c.conn.SetDeadline(t)
+}
+
 // Subprotocol returns the negotiated protocol for the connection.
 func (c *Conn) Subprotocol() string {
 	return c.subprotocol
