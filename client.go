@@ -369,7 +369,7 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		return nil, resp, ErrBadHandshake
 	}
 
-	for _, ext := range parseExtensions(req.Header) {
+	for _, ext := range parseExtensions(resp.Header) {
 		if ext[""] != "permessage-deflate" {
 			continue
 		}
