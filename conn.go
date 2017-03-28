@@ -937,6 +937,9 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 	for c.readErr == nil {
 		frameType, err := c.advanceFrame()
 		if err != nil {
+			if e, ok := err.(net.Error); ok && e.Timeout() {
+				return noFrame, nil, e
+			}
 			c.readErr = hideTempErr(err)
 			break
 		}
