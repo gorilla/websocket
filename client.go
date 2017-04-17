@@ -368,6 +368,8 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		resp.Body = ioutil.NopCloser(bytes.NewReader(buf[:n]))
 		return nil, resp, ErrBadHandshake
 	}
+	
+	resp.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
 
 	for _, ext := range parseExtensions(resp.Header) {
 		if ext[""] != "permessage-deflate" {
