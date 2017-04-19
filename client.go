@@ -115,10 +115,10 @@ func parseURL(s string) (*url.URL, error) {
 	}
 
 	if i := strings.Index(s, "/"); i >= 0 {
-		u.Opaque = s[i:]
+		u.Path = s[i:]
 		s = s[:i]
 	} else {
-		u.Opaque = "/"
+		u.Path = "/"
 	}
 
 	u.Host = s
