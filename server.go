@@ -162,6 +162,12 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	}
 	var brw *bufio.ReadWriter
 	netConn, brw, err = h.Hijack()
+	tcpConn, ok := netConn.(*net.TCPConn)
+	if ok {
+		// Set TCP keepalive for connections
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(10 * time.Second)
+	}
 	if err != nil {
 		return u.returnError(w, r, http.StatusInternalServerError, err.Error())
 	}
