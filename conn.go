@@ -958,7 +958,13 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 		panic("repeated read on failed websocket connection")
 	}
 
-	return noFrame, nil, c.readErr
+	err = c.readErr
+	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		c.readErr = nil
+		c.readErrCount--
+	}
+
+	return noFrame, nil, err
 }
 
 type messageReader struct{ c *Conn }
