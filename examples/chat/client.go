@@ -120,6 +120,11 @@ func (c *Client) writePump() {
 	}
 }
 
+func handleClientWSConnection(client *Client) {
+	go client.writePump()
+	client.readPump()
+}
+
 // serveWs handles websocket requests from the peer.
 func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -127,8 +132,10 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
+	
 	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
 	client.hub.register <- client
-	go client.writePump()
-	client.readPump()
+	
+	// launch a new goroutine, now HTTP server can free unneeded things
+	go handleClientWSConnection(client)
 }
