@@ -235,6 +235,7 @@ type Conn struct {
 	writeBuf      []byte    // frame is constructed in this buffer.
 	writeDeadline time.Time
 	writer        io.WriteCloser // the current writer returned to the application
+	isWriting     bool           // for best-effort concurrent write detection
 
 	writeErrMu sync.Mutex
 	writeErr   error
@@ -579,8 +580,9 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 	// Write the buffers to the connection with best-effort detection of
 	// concurrent writes. See the concurrency section in the package
 	// documentation for more info.
-
+	c.isWriting = true
 	err := c.write(w.frameType, c.writeDeadline, c.writeBuf[framePos:w.pos], extra)
+	c.isWriting = false
 
 	if err != nil {
 		return w.fatal(err)
@@ -702,7 +704,9 @@ func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 	if err != nil {
 		return err
 	}
+	c.isWriting = true
 	err = c.write(frameType, c.writeDeadline, frameData, nil)
+	c.isWriting = false
 	return err
 }
 
@@ -740,6 +744,11 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 func (c *Conn) SetWriteDeadline(t time.Time) error {
 	c.writeDeadline = t
 	return nil
+}
+
+// Return the conn writing status
+func (c *Conn) IsWriting() bool {
+	return c.isWriting
 }
 
 // Read methods
