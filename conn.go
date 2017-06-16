@@ -580,8 +580,17 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 	// Write the buffers to the connection with best-effort detection of
 	// concurrent writes. See the concurrency section in the package
 	// documentation for more info.
+
+	if c.isWriting {
+		panic("concurrent write to websocket connection")
+	}
 	c.isWriting = true
+
 	err := c.write(w.frameType, c.writeDeadline, c.writeBuf[framePos:w.pos], extra)
+
+	if !c.isWriting {
+		panic("concurrent write to websocket connection")
+	}
 	c.isWriting = false
 
 	if err != nil {
@@ -704,8 +713,14 @@ func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 	if err != nil {
 		return err
 	}
+	if c.isWriting {
+		panic("concurrent write to websocket connection")
+	}
 	c.isWriting = true
 	err = c.write(frameType, c.writeDeadline, frameData, nil)
+	if !c.isWriting {
+		panic("concurrent write to websocket connection")
+	}
 	c.isWriting = false
 	return err
 }
