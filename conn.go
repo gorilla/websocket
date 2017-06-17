@@ -236,6 +236,7 @@ type Conn struct {
 	writeDeadline time.Time
 	writer        io.WriteCloser // the current writer returned to the application
 	isWriting     bool           // for best-effort concurrent write detection
+	writeMu       sync.Mutex
 
 	writeErrMu sync.Mutex
 	writeErr   error
@@ -581,6 +582,8 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 	// concurrent writes. See the concurrency section in the package
 	// documentation for more info.
 
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 	if c.isWriting {
 		panic("concurrent write to websocket connection")
 	}
@@ -713,6 +716,8 @@ func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 	if err != nil {
 		return err
 	}
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 	if c.isWriting {
 		panic("concurrent write to websocket connection")
 	}
@@ -763,6 +768,8 @@ func (c *Conn) SetWriteDeadline(t time.Time) error {
 
 // Return the conn writing status
 func (c *Conn) IsWriting() bool {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 	return c.isWriting
 }
 
