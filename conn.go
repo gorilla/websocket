@@ -247,6 +247,7 @@ type Conn struct {
 
 	// Read fields
 	reader        io.ReadCloser // the current reader returned to the application
+	readMu        sync.Mutex
 	readErr       error
 	br            *bufio.Reader
 	readRemaining int64 // bytes remaining in current frame.
@@ -582,8 +583,6 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 	// concurrent writes. See the concurrency section in the package
 	// documentation for more info.
 
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
 	if c.isWriting {
 		panic("concurrent write to websocket connection")
 	}
@@ -716,8 +715,6 @@ func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 	if err != nil {
 		return err
 	}
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
 	if c.isWriting {
 		panic("concurrent write to websocket connection")
 	}
@@ -733,6 +730,8 @@ func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 // WriteMessage is a helper method for getting a writer using NextWriter,
 // writing the message and closing the writer.
 func (c *Conn) WriteMessage(messageType int, data []byte) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 
 	if c.isServer && (c.newCompressionWriter == nil || !c.enableWriteCompression) {
 		// Fast path with no allocations and single frame.
@@ -768,8 +767,6 @@ func (c *Conn) SetWriteDeadline(t time.Time) error {
 
 // Return the conn writing status
 func (c *Conn) IsWriting() bool {
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
 	return c.isWriting
 }
 
@@ -1027,6 +1024,8 @@ func (r *messageReader) Close() error {
 // ReadMessage is a helper method for getting a reader using NextReader and
 // reading from that reader to a buffer.
 func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
+	c.readMu.Lock()
+	defer c.readMu.Unlock()
 	var r io.Reader
 	messageType, r, err = c.NextReader()
 	if err != nil {
