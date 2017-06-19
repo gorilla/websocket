@@ -360,6 +360,23 @@ func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
+//
+func (c *Conn) WriteLock() {
+	c.writeMu.Lock()
+	c.isWriting = true
+}
+
+//
+func (c *Conn) WriteUnlock() {
+	c.isWriting = false
+	c.writeMu.Unlock()
+}
+
+// Return the conn writing status
+func (c *Conn) IsWriting() bool {
+	return c.isWriting
+}
+
 // Write methods
 
 func (c *Conn) writeFatal(err error) error {
@@ -579,21 +596,7 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 		}
 	}
 
-	// Write the buffers to the connection with best-effort detection of
-	// concurrent writes. See the concurrency section in the package
-	// documentation for more info.
-
-	if c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = true
-
 	err := c.write(w.frameType, c.writeDeadline, c.writeBuf[framePos:w.pos], extra)
-
-	if !c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = false
 
 	if err != nil {
 		return w.fatal(err)
@@ -715,23 +718,17 @@ func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 	if err != nil {
 		return err
 	}
-	if c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = true
+
 	err = c.write(frameType, c.writeDeadline, frameData, nil)
-	if !c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = false
+
 	return err
 }
 
 // WriteMessage is a helper method for getting a writer using NextWriter,
 // writing the message and closing the writer.
 func (c *Conn) WriteMessage(messageType int, data []byte) error {
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
+	c.WriteLock()
+	defer c.WriteUnlock()
 
 	if c.isServer && (c.newCompressionWriter == nil || !c.enableWriteCompression) {
 		// Fast path with no allocations and single frame.
@@ -763,11 +760,6 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 func (c *Conn) SetWriteDeadline(t time.Time) error {
 	c.writeDeadline = t
 	return nil
-}
-
-// Return the conn writing status
-func (c *Conn) IsWriting() bool {
-	return c.isWriting
 }
 
 // Read methods
