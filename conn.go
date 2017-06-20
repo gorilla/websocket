@@ -236,6 +236,7 @@ type Conn struct {
 	writeDeadline time.Time
 	writer        io.WriteCloser // the current writer returned to the application
 	isWriting     bool           // for best-effort concurrent write detection
+	writeMu       sync.Mutex
 
 	writeErrMu sync.Mutex
 	writeErr   error
@@ -246,6 +247,7 @@ type Conn struct {
 
 	// Read fields
 	reader        io.ReadCloser // the current reader returned to the application
+	readMu        sync.Mutex
 	readErr       error
 	br            *bufio.Reader
 	readRemaining int64 // bytes remaining in current frame.
@@ -356,6 +358,23 @@ func (c *Conn) LocalAddr() net.Addr {
 // RemoteAddr returns the remote network address.
 func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
+}
+
+//
+func (c *Conn) WriteLock() {
+	c.writeMu.Lock()
+	c.isWriting = true
+}
+
+//
+func (c *Conn) WriteUnlock() {
+	c.isWriting = false
+	c.writeMu.Unlock()
+}
+
+// Return the conn writing status
+func (c *Conn) IsWriting() bool {
+	return c.isWriting
 }
 
 // Write methods
@@ -577,21 +596,7 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 		}
 	}
 
-	// Write the buffers to the connection with best-effort detection of
-	// concurrent writes. See the concurrency section in the package
-	// documentation for more info.
-
-	if c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = true
-
 	err := c.write(w.frameType, c.writeDeadline, c.writeBuf[framePos:w.pos], extra)
-
-	if !c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = false
 
 	if err != nil {
 		return w.fatal(err)
@@ -713,21 +718,17 @@ func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 	if err != nil {
 		return err
 	}
-	if c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = true
+
 	err = c.write(frameType, c.writeDeadline, frameData, nil)
-	if !c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = false
+
 	return err
 }
 
 // WriteMessage is a helper method for getting a writer using NextWriter,
 // writing the message and closing the writer.
 func (c *Conn) WriteMessage(messageType int, data []byte) error {
+	c.WriteLock()
+	defer c.WriteUnlock()
 
 	if c.isServer && (c.newCompressionWriter == nil || !c.enableWriteCompression) {
 		// Fast path with no allocations and single frame.
@@ -1015,6 +1016,8 @@ func (r *messageReader) Close() error {
 // ReadMessage is a helper method for getting a reader using NextReader and
 // reading from that reader to a buffer.
 func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
+	c.readMu.Lock()
+	defer c.readMu.Unlock()
 	var r io.Reader
 	messageType, r, err = c.NextReader()
 	if err != nil {
