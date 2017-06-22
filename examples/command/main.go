@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	addr    = flag.String("addr", "127.0.0.1:8080", "http service address")
+	addr    = flag.String("addr", ":8080", "http service address")
 	cmdPath string
 )
 
