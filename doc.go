@@ -6,9 +6,9 @@
 //
 // Overview
 //
-// The Conn type represents a WebSocket connection. A server application uses
-// the Upgrade function from an Upgrader object with a HTTP request handler
-// to get a pointer to a Conn:
+// The Conn type represents a WebSocket connection. Within the context of an
+// HTTP request handler, a server application calls the Upgrade method of an
+// Upgrader instance obtaining a pointer to a Conn:
 //
 //  var upgrader = websocket.Upgrader{
 //      ReadBufferSize:  1024,
@@ -147,9 +147,15 @@
 //      CheckOrigin: func(r *http.Request) bool { return true },
 //  }
 //
-// The deprecated Upgrade function does not enforce an origin policy. It's the
-// application's responsibility to check the Origin header before calling
-// Upgrade.
+// We recommend the upgrader.Upgrade method to perform an upgrade
+// from an HTTP connection to a websocket connection. This method performs
+// origin policy checking using the CheckOrigin field associated with the
+// Upgrader instance.
+//
+// By contrast, the deprecated package-level Upgrade function
+// does not perform origin checking. In this case is the application's
+// responsibility to manually check the Origin header before calling the
+// package-level Upgrade function.
 //
 // Compression EXPERIMENTAL
 //
