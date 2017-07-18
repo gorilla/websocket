@@ -228,9 +228,9 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	return c, nil
 }
 
-// Deprecated: Use websocket.Upgrader instead.
-//
 // Upgrade upgrades the HTTP server connection to the WebSocket protocol.
+//
+// Deprecated: Use websocket.Upgrader instead.
 //
 // Upgrade does not perform origin checking. The application is responsible for
 // checking the Origin header before calling Upgrade. An example implementation

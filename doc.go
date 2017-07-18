@@ -146,11 +146,6 @@
 //      CheckOrigin: func(r *http.Request) bool { return true },
 //  }
 //
-// We recommend the upgrader.Upgrade method to perform an upgrade
-// from an HTTP connection to a websocket connection. This method performs
-// origin policy checking using the CheckOrigin field associated with the
-// Upgrader instance.
-//
 // The deprecated package-level Upgrade function does not perform origin
 // checking. The application is responsible for checking the Origin header
 // before calling the Upgrade function.
