@@ -727,6 +727,7 @@ func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 
 // WriteMessage is a helper method for getting a writer using NextWriter,
 // writing the message and closing the writer.
+// messageType is an int with value websocket.BinaryMessage or websocket.TextMessage.
 func (c *Conn) WriteMessage(messageType int, data []byte) error {
 
 	if c.isServer && (c.newCompressionWriter == nil || !c.enableWriteCompression) {
