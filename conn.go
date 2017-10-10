@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -1029,6 +1030,9 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 // all future reads will return an error. A zero value for t means reads will
 // not time out.
 func (c *Conn) SetReadDeadline(t time.Time) error {
+	if c.readErr != nil && strings.Contains(c.readErr.Error(), "i/o timeout") {
+		c.readErr = nil
+	}
 	return c.conn.SetReadDeadline(t)
 }
 
