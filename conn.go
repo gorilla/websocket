@@ -13,10 +13,10 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
-	"strings"
 )
 
 const (
