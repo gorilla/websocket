@@ -237,7 +237,7 @@ func TestDialCookieJar(t *testing.T) {
 	d := cstDialer
 	d.Jar = jar
 
-	u, _ := parseURL(s.URL)
+	u, _ := url.Parse(s.URL)
 
 	switch u.Scheme {
 	case "ws":
