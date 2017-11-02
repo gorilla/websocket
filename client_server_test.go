@@ -160,8 +160,8 @@ func TestProxyDial(t *testing.T) {
 			}
 
 			if !connect {
-				t.Log("connect not recieved")
-				http.Error(w, "connect not recieved", 405)
+				t.Log("connect not received")
+				http.Error(w, "connect not received", 405)
 				return
 			}
 			origHandler.ServeHTTP(w, r)
@@ -200,8 +200,8 @@ func TestProxyAuthorizationDial(t *testing.T) {
 			}
 
 			if !connect {
-				t.Log("connect with proxy authorization not recieved")
-				http.Error(w, "connect with proxy authorization not recieved", 405)
+				t.Log("connect with proxy authorization not received")
+				http.Error(w, "connect with proxy authorization not received", 405)
 				return
 			}
 			origHandler.ServeHTTP(w, r)
@@ -246,7 +246,7 @@ func TestDialCookieJar(t *testing.T) {
 		u.Scheme = "https"
 	}
 
-	cookies := []*http.Cookie{&http.Cookie{Name: "gorilla", Value: "ws", Path: "/"}}
+	cookies := []*http.Cookie{{Name: "gorilla", Value: "ws", Path: "/"}}
 	d.Jar.SetCookies(u, cookies)
 
 	ws, _, err := d.Dial(s.URL, nil)
