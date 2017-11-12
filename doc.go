@@ -30,10 +30,12 @@
 //  for {
 //      messageType, p, err := conn.ReadMessage()
 //      if err != nil {
+//          log.Println(err)
 //          return
 //      }
 //      if err := conn.WriteMessage(messageType, p); err != nil {
-//          return err
+//          log.Println(err)
+//          return
 //      }
 //  }
 //
