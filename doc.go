@@ -95,8 +95,13 @@
 // functions are called from the NextReader, ReadMessage and the message Read
 // methods.
 //
+// Connections handle comes with default handler which can be overrided: 
 // The default ping handler sends a pong to the peer. The application's reading
 // goroutine can block for a short time while the handler writes the pong data
+// to the connection.
+// The default pong handler does nothing.
+// The default close handler sends a close frame back to the peer. Like with ping,
+// the goroutine can block for a short time while the handler writes the close data
 // to the connection.
 //
 // The application must read the connection to process ping, pong and close
