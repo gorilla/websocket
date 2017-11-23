@@ -341,7 +341,6 @@ func TestUnderlyingConn(t *testing.T) {
 }
 
 func TestBufioReadBytes(t *testing.T) {
-
 	// Test calling bufio.ReadBytes for value longer than read buffer size.
 
 	m := make([]byte, 512)
