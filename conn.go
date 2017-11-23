@@ -102,7 +102,6 @@ func (e *netError) Timeout() bool   { return e.timeout }
 
 // CloseError represents close frame.
 type CloseError struct {
-
 	// Code is defined in RFC 6455, section 11.7.
 	Code int
 
@@ -767,7 +766,6 @@ func (c *Conn) SetWriteDeadline(t time.Time) error {
 // Read methods
 
 func (c *Conn) advanceFrame() (int, error) {
-
 	// 1. Skip remainder of previous frame.
 
 	if c.readRemaining > 0 {
