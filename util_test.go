@@ -10,6 +10,24 @@ import (
 	"testing"
 )
 
+var equalASCIIFoldTests = []struct {
+	t, s string
+	eq   bool
+}{
+	{"WebSocket", "websocket", true},
+	{"websocket", "WebSocket", true},
+	{"Öyster", "öyster", false},
+}
+
+func TestEqualASCIIFold(t *testing.T) {
+	for _, tt := range equalASCIIFoldTests {
+		eq := equalASCIIFold(tt.s, tt.t)
+		if eq != tt.eq {
+			t.Errorf("equalASCIIFold(%q, %q) = %v, want %v", tt.s, tt.t, eq, tt.eq)
+		}
+	}
+}
+
 var tokenListContainsValueTests = []struct {
 	value string
 	ok    bool
