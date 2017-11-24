@@ -76,7 +76,7 @@ func checkSameOrigin(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
-	return strings.ToLower(u.Host) == strings.ToLower(r.Host)
+	return equalASCIIFold(u.Host, r.Host)
 }
 
 func (u *Upgrader) selectSubprotocol(r *http.Request, responseHeader http.Header) string {
