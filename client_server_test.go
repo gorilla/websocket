@@ -398,9 +398,17 @@ func TestBadMethod(t *testing.T) {
 	}))
 	defer s.Close()
 
-	resp, err := http.PostForm(s.URL, url.Values{})
+	req, err := http.NewRequest("POST", s.URL, strings.NewReader(""))
 	if err != nil {
-		t.Fatalf("PostForm returned error %v", err)
+		t.Fatalf("NewRequest returned error %v", err)
+	}
+	req.Header.Set("Connection", "upgrade")
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Sec-Websocket-Version", "13")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Do returned error %v", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusMethodNotAllowed {
