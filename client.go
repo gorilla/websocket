@@ -5,10 +5,8 @@
 package websocket
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/tls"
-	"encoding/base64"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -106,7 +104,7 @@ func hostPortNoPort(u *url.URL) (hostPort, hostNoPort string) {
 	return hostPort, hostNoPort
 }
 
-// DefaultDialer is a dialer with all fields set to the default zero values.
+// DefaultDialer is a dialer with all fields set to the default values.
 var DefaultDialer = &Dialer{
 	Proxy: http.ProxyFromEnvironment,
 }
@@ -202,36 +200,52 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		req.Header.Set("Sec-Websocket-Extensions", "permessage-deflate; server_no_context_takeover; client_no_context_takeover")
 	}
 
-	hostPort, hostNoPort := hostPortNoPort(u)
-
-	var proxyURL *url.URL
-	// Check wether the proxy method has been configured
-	if d.Proxy != nil {
-		proxyURL, err = d.Proxy(req)
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var targetHostPort string
-	if proxyURL != nil {
-		targetHostPort, _ = hostPortNoPort(proxyURL)
-	} else {
-		targetHostPort = hostPort
-	}
-
 	var deadline time.Time
 	if d.HandshakeTimeout != 0 {
 		deadline = time.Now().Add(d.HandshakeTimeout)
 	}
 
+	// Get network dial function.
 	netDial := d.NetDial
 	if netDial == nil {
 		netDialer := &net.Dialer{Deadline: deadline}
 		netDial = netDialer.Dial
 	}
 
-	netConn, err := netDial("tcp", targetHostPort)
+	// If needed, wrap the dial function to set the connection deadline.
+	if !deadline.Equal(time.Time{}) {
+		forwardDial := netDial
+		netDial = func(network, addr string) (net.Conn, error) {
+			c, err := forwardDial(network, addr)
+			if err != nil {
+				return nil, err
+			}
+			err = c.SetDeadline(deadline)
+			if err != nil {
+				c.Close()
+				return nil, err
+			}
+			return c, nil
+		}
+	}
+
+	// If needed, wrap the dial function to connect through a proxy.
+	if d.Proxy != nil {
+		proxyURL, err := d.Proxy(req)
+		if err != nil {
+			return nil, nil, err
+		}
+		if proxyURL != nil {
+			dialer, err := proxy_FromURL(proxyURL, netDialerFunc(netDial))
+			if err != nil {
+				return nil, nil, err
+			}
+			netDial = dialer.Dial
+		}
+	}
+
+	hostPort, hostNoPort := hostPortNoPort(u)
+	netConn, err := netDial("tcp", hostPort)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -241,42 +255,6 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 			netConn.Close()
 		}
 	}()
-
-	if err := netConn.SetDeadline(deadline); err != nil {
-		return nil, nil, err
-	}
-
-	if proxyURL != nil {
-		connectHeader := make(http.Header)
-		if user := proxyURL.User; user != nil {
-			proxyUser := user.Username()
-			if proxyPassword, passwordSet := user.Password(); passwordSet {
-				credential := base64.StdEncoding.EncodeToString([]byte(proxyUser + ":" + proxyPassword))
-				connectHeader.Set("Proxy-Authorization", "Basic "+credential)
-			}
-		}
-		connectReq := &http.Request{
-			Method: "CONNECT",
-			URL:    &url.URL{Opaque: hostPort},
-			Host:   hostPort,
-			Header: connectHeader,
-		}
-
-		connectReq.Write(netConn)
-
-		// Read response.
-		// Okay to use and discard buffered reader here, because
-		// TLS server will not speak until spoken to.
-		br := bufio.NewReader(netConn)
-		resp, err := http.ReadResponse(br, connectReq)
-		if err != nil {
-			return nil, nil, err
-		}
-		if resp.StatusCode != 200 {
-			f := strings.SplitN(resp.Status, " ", 2)
-			return nil, nil, errors.New(f[1])
-		}
-	}
 
 	if u.Scheme == "https" {
 		cfg := cloneTLSConfig(d.TLSClientConfig)

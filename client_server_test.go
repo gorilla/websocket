@@ -5,11 +5,14 @@
 package websocket
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/binary"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -31,9 +34,10 @@ var cstUpgrader = Upgrader{
 }
 
 var cstDialer = Dialer{
-	Subprotocols:    []string{"p1", "p2"},
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+	Subprotocols:     []string{"p1", "p2"},
+	ReadBufferSize:   1024,
+	WriteBufferSize:  1024,
+	HandshakeTimeout: 30 * time.Second,
 }
 
 type cstHandler struct{ *testing.T }
@@ -143,8 +147,9 @@ func TestProxyDial(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()
 
-	surl, _ := url.Parse(s.URL)
+	surl, _ := url.Parse(s.Server.URL)
 
+	cstDialer := cstDialer // make local copy for modification on next line.
 	cstDialer.Proxy = http.ProxyURL(surl)
 
 	connect := false
@@ -173,16 +178,16 @@ func TestProxyDial(t *testing.T) {
 	}
 	defer ws.Close()
 	sendRecv(t, ws)
-
-	cstDialer.Proxy = http.ProxyFromEnvironment
 }
 
 func TestProxyAuthorizationDial(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()
 
-	surl, _ := url.Parse(s.URL)
+	surl, _ := url.Parse(s.Server.URL)
 	surl.User = url.UserPassword("username", "password")
+
+	cstDialer := cstDialer // make local copy for modification on next line.
 	cstDialer.Proxy = http.ProxyURL(surl)
 
 	connect := false
@@ -213,8 +218,6 @@ func TestProxyAuthorizationDial(t *testing.T) {
 	}
 	defer ws.Close()
 	sendRecv(t, ws)
-
-	cstDialer.Proxy = http.ProxyFromEnvironment
 }
 
 func TestDial(t *testing.T) {
@@ -512,6 +515,85 @@ func TestDialCompression(t *testing.T) {
 	dialer := cstDialer
 	dialer.EnableCompression = true
 	ws, _, err := dialer.Dial(s.URL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer ws.Close()
+	sendRecv(t, ws)
+}
+
+func TestSocksProxyDial(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	proxyListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen failed: %v", err)
+	}
+	defer proxyListener.Close()
+	go func() {
+		c1, err := proxyListener.Accept()
+		if err != nil {
+			t.Errorf("proxy accept failed: %v", err)
+			return
+		}
+		defer c1.Close()
+
+		c1.SetDeadline(time.Now().Add(30 * time.Second))
+
+		buf := make([]byte, 32)
+		if _, err := io.ReadFull(c1, buf[:3]); err != nil {
+			t.Errorf("read failed: %v", err)
+			return
+		}
+		if want := []byte{5, 1, 0}; !bytes.Equal(want, buf[:len(want)]) {
+			t.Errorf("read %x, want %x", buf[:len(want)], want)
+		}
+		if _, err := c1.Write([]byte{5, 0}); err != nil {
+			t.Errorf("write failed: %v", err)
+			return
+		}
+		if _, err := io.ReadFull(c1, buf[:10]); err != nil {
+			t.Errorf("read failed: %v", err)
+			return
+		}
+		if want := []byte{5, 1, 0, 1}; !bytes.Equal(want, buf[:len(want)]) {
+			t.Errorf("read %x, want %x", buf[:len(want)], want)
+			return
+		}
+		buf[1] = 0
+		if _, err := c1.Write(buf[:10]); err != nil {
+			t.Errorf("write failed: %v", err)
+			return
+		}
+
+		ip := net.IP(buf[4:8])
+		port := binary.BigEndian.Uint16(buf[8:10])
+
+		c2, err := net.DialTCP("tcp", nil, &net.TCPAddr{IP: ip, Port: int(port)})
+		if err != nil {
+			t.Errorf("dial failed; %v", err)
+			return
+		}
+		defer c2.Close()
+		done := make(chan struct{})
+		go func() {
+			io.Copy(c1, c2)
+			close(done)
+		}()
+		io.Copy(c2, c1)
+		<-done
+	}()
+
+	purl, err := url.Parse("socks5://" + proxyListener.Addr().String())
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+
+	cstDialer := cstDialer // make local copy for modification on next line.
+	cstDialer.Proxy = http.ProxyURL(purl)
+
+	ws, _, err := cstDialer.Dial(s.URL, nil)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
