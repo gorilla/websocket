@@ -79,6 +79,9 @@ var parseExtensionTests = []struct {
 	{`permessage-deflate; client_max_window_bits; server_max_window_bits=10 , permessage-deflate; client_max_window_bits`, []map[string]string{
 		{"": "permessage-deflate", "client_max_window_bits": "", "server_max_window_bits": "10"},
 		{"": "permessage-deflate", "client_max_window_bits": ""}}},
+	{"permessage-deflate; server_no_context_takeover; client_max_window_bits=15", []map[string]string{
+		{"": "permessage-deflate", "server_no_context_takeover": "", "client_max_window_bits": "15"},
+	}},
 }
 
 func TestParseExtensions(t *testing.T) {
