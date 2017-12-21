@@ -44,7 +44,7 @@ Clients send requests to the hub using the `register`, `unregister` and
 `broadcast` channels.
 
 The hub registers clients by adding the client pointer as a key in the
-`clients` map. The map value is always true.
+`clients` map. The map value is empty struct.
 
 The unregister code is a little more complicated. In addition to deleting the
 client pointer from the `clients` map, the hub closes the clients's `send`
