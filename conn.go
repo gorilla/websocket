@@ -1061,10 +1061,7 @@ func (c *Conn) CloseHandler() func(code int, text string) error {
 func (c *Conn) SetCloseHandler(h func(code int, text string) error) {
 	if h == nil {
 		h = func(code int, text string) error {
-			message := []byte{}
-			if code != CloseNoStatusReceived {
-				message = FormatCloseMessage(code, "")
-			}
+			message := FormatCloseMessage(code, "")
 			c.WriteControl(CloseMessage, message, time.Now().Add(writeWait))
 			return nil
 		}
@@ -1142,7 +1139,14 @@ func (c *Conn) SetCompressionLevel(level int) error {
 }
 
 // FormatCloseMessage formats closeCode and text as a WebSocket close message.
+// An empty message is returned for code CloseNoStatusReceived.
 func FormatCloseMessage(closeCode int, text string) []byte {
+	if closeCode == CloseNoStatusReceived {
+		// Return empty message because it's illegal to send
+		// CloseNoStatusReceived. Return non-nil value in case application
+		// checks for nil.
+		return []byte{}
+	}
 	buf := make([]byte, 2+len(text))
 	binary.BigEndian.PutUint16(buf, uint16(closeCode))
 	copy(buf[2:], text)
