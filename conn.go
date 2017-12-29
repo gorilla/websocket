@@ -837,9 +837,9 @@ func (c *Conn) advanceFrame() (int, error) {
 
 	// 4. Handle frame masking.
 
-	if mask != c.isServer {
-		return noFrame, c.handleProtocolError("incorrect mask flag")
-	}
+	// if mask != c.isServer {
+	// 	return noFrame, c.handleProtocolError("incorrect mask flag")
+	//}
 
 	if mask {
 		c.readMaskPos = 0
@@ -872,7 +872,7 @@ func (c *Conn) advanceFrame() (int, error) {
 		if err != nil {
 			return noFrame, err
 		}
-		if c.isServer {
+		if c.isServer && mask {
 			maskBytes(c.readMaskKey, 0, payload)
 		}
 	}
