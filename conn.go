@@ -1119,6 +1119,12 @@ func (c *Conn) UnderlyingConn() net.Conn {
 	return c.conn
 }
 
+// BufferReader returns the internal buffer reader. This can be used to read
+// the raw data after upgrade success
+func (c *Conn) BufferReader() *bufio.Reader {
+	return c.br
+}
+
 // EnableWriteCompression enables and disables write compression of
 // subsequent text and binary messages. This function is a noop if
 // compression was not negotiated with the peer.
