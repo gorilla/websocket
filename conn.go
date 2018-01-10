@@ -100,7 +100,7 @@ func (e *netError) Error() string   { return e.msg }
 func (e *netError) Temporary() bool { return e.temporary }
 func (e *netError) Timeout() bool   { return e.timeout }
 
-// CloseError represents close frame.
+// CloseError represents a close message.
 type CloseError struct {
 	// Code is defined in RFC 6455, section 11.7.
 	Code int
@@ -342,7 +342,8 @@ func (c *Conn) Subprotocol() string {
 	return c.subprotocol
 }
 
-// Close closes the underlying network connection without sending or waiting for a close frame.
+// Close closes the underlying network connection without sending or waiting
+// for a close message.
 func (c *Conn) Close() error {
 	return c.conn.Close()
 }
@@ -1034,7 +1035,7 @@ func (c *Conn) SetReadDeadline(t time.Time) error {
 }
 
 // SetReadLimit sets the maximum size for a message read from the peer. If a
-// message exceeds the limit, the connection sends a close frame to the peer
+// message exceeds the limit, the connection sends a close message to the peer
 // and returns ErrReadLimit to the application.
 func (c *Conn) SetReadLimit(limit int64) {
 	c.readLimit = limit
@@ -1047,16 +1048,16 @@ func (c *Conn) CloseHandler() func(code int, text string) error {
 
 // SetCloseHandler sets the handler for close messages received from the peer.
 // The code argument to h is the received close code or CloseNoStatusReceived
-// if the close message is empty. The default close handler sends a close frame
-// back to the peer.
+// if the close message is empty. The default close handler sends a close
+// message back to the peer.
 //
 // The application must read the connection to process close messages as
-// described in the section on Control Frames above.
+// described in the section on Control Messages above.
 //
-// The connection read methods return a CloseError when a close frame is
+// The connection read methods return a CloseError when a close message is
 // received. Most applications should handle close messages as part of their
 // normal error handling. Applications should only set a close handler when the
-// application must perform some action before sending a close frame back to
+// application must perform some action before sending a close message back to
 // the peer.
 func (c *Conn) SetCloseHandler(h func(code int, text string) error) {
 	if h == nil {
@@ -1075,11 +1076,11 @@ func (c *Conn) PingHandler() func(appData string) error {
 }
 
 // SetPingHandler sets the handler for ping messages received from the peer.
-// The appData argument to h is the PING frame application data. The default
+// The appData argument to h is the PING message application data. The default
 // ping handler sends a pong to the peer.
 //
 // The application must read the connection to process ping messages as
-// described in the section on Control Frames above.
+// described in the section on Control Messages above.
 func (c *Conn) SetPingHandler(h func(appData string) error) {
 	if h == nil {
 		h = func(message string) error {
@@ -1101,11 +1102,11 @@ func (c *Conn) PongHandler() func(appData string) error {
 }
 
 // SetPongHandler sets the handler for pong messages received from the peer.
-// The appData argument to h is the PONG frame application data. The default
+// The appData argument to h is the PONG message application data. The default
 // pong handler does nothing.
 //
 // The application must read the connection to process ping messages as
-// described in the section on Control Frames above.
+// described in the section on Control Messages above.
 func (c *Conn) SetPongHandler(h func(appData string) error) {
 	if h == nil {
 		h = func(string) error { return nil }
