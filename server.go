@@ -7,6 +7,7 @@ package websocket
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -142,14 +143,25 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	subprotocol := u.selectSubprotocol(r, responseHeader)
 
 	// Negotiate PMCE
-	var compress bool
+	var (
+		compress        bool
+		contextTakeover bool
+	)
 	if u.EnableCompression {
 		for _, ext := range parseExtensions(r.Header) {
-			if ext[""] != "permessage-deflate" {
+			// map[string]string{"":"permessage-deflate", "client_max_window_bits":""}
+			// context-takeoverをclient_max_window_bitsから判定する
+			fmt.Printf("%#v\n", ext)
+			if ext[""] == "permessage-deflate" {
+				compress = true
 				continue
 			}
-			compress = true
-			break
+
+			if _, ok := ext["client_max_window_bits"]; ok {
+				// Todo: validation. window size level only allow 15.
+				contextTakeover = true
+				continue
+			}
 		}
 	}
 
@@ -177,6 +189,9 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	c.subprotocol = subprotocol
 
 	if compress {
+		if contextTakeover {
+
+		}
 		c.newCompressionWriter = compressNoContextTakeover
 		c.newDecompressionReader = decompressNoContextTakeover
 	}
