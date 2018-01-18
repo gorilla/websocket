@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -150,15 +151,21 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	if u.EnableCompression {
 		for _, ext := range parseExtensions(r.Header) {
 			// map[string]string{"":"permessage-deflate", "client_max_window_bits":""}
-			// context-takeoverをclient_max_window_bitsから判定する
+			// detect context-takeover from client_max_window_bits
 			fmt.Printf("%#v\n", ext)
 			if ext[""] == "permessage-deflate" {
 				compress = true
 				continue
 			}
 
-			if _, ok := ext["client_max_window_bits"]; ok {
-				// Todo: validation. window size level only allow 15.
+			if level, ok := ext["client_max_window_bits"]; ok {
+				l, err := strconv.Atoi(level)
+				if err != nil {
+					return nil, errors.New(err.Error())
+				}
+				if l != 15 {
+					return u.returnError(w, r, http.StatusBadRequest, "client_max_window_bits level only allow 15.")
+				}
 				contextTakeover = true
 				continue
 			}
