@@ -23,3 +23,4 @@ _testmain.go
 
 .idea/
 *.iml
+.vscode/
