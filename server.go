@@ -7,7 +7,6 @@ package websocket
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -187,7 +186,6 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	if compress {
 		switch {
 		case contextTakeover:
-			fmt.Println("contextTakeover strategy is set...")
 			c.newCompressionWriter = compressContextTakeover
 			c.newDecompressionReader = decompressContextTakeover
 		default:
