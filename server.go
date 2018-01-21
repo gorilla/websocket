@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -152,22 +151,12 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		for _, ext := range parseExtensions(r.Header) {
 			// map[string]string{"":"permessage-deflate", "client_max_window_bits":""}
 			// detect context-takeover from client_max_window_bits
-			fmt.Printf("%#v\n", ext)
 			if ext[""] == "permessage-deflate" {
 				compress = true
-				continue
 			}
 
-			if level, ok := ext["client_max_window_bits"]; ok {
-				l, err := strconv.Atoi(level)
-				if err != nil {
-					return nil, errors.New(err.Error())
-				}
-				if l != 15 {
-					return u.returnError(w, r, http.StatusBadRequest, "client_max_window_bits level only allow 15.")
-				}
+			if _, ok := ext["client_max_window_bits"]; ok {
 				contextTakeover = true
-				continue
 			}
 		}
 	}
@@ -196,11 +185,15 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	c.subprotocol = subprotocol
 
 	if compress {
-		if contextTakeover {
-
+		switch {
+		case contextTakeover:
+			fmt.Println("contextTakeover strategy is set...")
+			c.newCompressionWriter = compressContextTakeover
+			c.newDecompressionReader = decompressContextTakeover
+		default:
+			c.newCompressionWriter = compressNoContextTakeover
+			c.newDecompressionReader = decompressNoContextTakeover
 		}
-		c.newCompressionWriter = compressNoContextTakeover
-		c.newDecompressionReader = decompressNoContextTakeover
 	}
 
 	p := c.writeBuf[:0]
@@ -213,7 +206,12 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		p = append(p, "\r\n"...)
 	}
 	if compress {
-		p = append(p, "Sec-Websocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover\r\n"...)
+		switch {
+		case contextTakeover:
+			p = append(p, "Sec-Websocket-Extensions: permessage-deflate; server_max_window_bits=15; client_max_window_bits=15\r\n"...)
+		default:
+			p = append(p, "Sec-Websocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover\r\n"...)
+		}
 	}
 	for k, vs := range responseHeader {
 		if k == "Sec-Websocket-Protocol" {
