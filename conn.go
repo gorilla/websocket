@@ -265,7 +265,8 @@ type Conn struct {
 	newDecompressionReader func(io.Reader, []byte) io.ReadCloser // arges may flateReadWrapper struct
 
 	contextTakeover bool
-	dict            []byte
+	txDict          []byte
+	rxDict          []byte
 	mutex           sync.RWMutex
 }
 
@@ -508,7 +509,7 @@ func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
 		mw.compress = true
 		switch {
 		case c.contextTakeover:
-			c.writer = c.newCompressionWriter(c.writer, c.compressionLevel, c.dict)
+			c.writer = c.newCompressionWriter(c.writer, c.compressionLevel, c.txDict)
 		// no-context-takeover
 		default:
 			c.writer = c.newCompressionWriter(c.writer, c.compressionLevel, nil)
@@ -764,7 +765,7 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 		return err
 	}
 	if c.contextTakeover {
-		c.AddDict(data)
+		c.AddTxDict(data)
 	}
 	return w.Close()
 }
@@ -962,7 +963,7 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 
 			switch {
 			case c.readDecompress && c.contextTakeover:
-				c.reader = c.newDecompressionReader(c.reader, c.dict)
+				c.reader = c.newDecompressionReader(c.reader, c.rxDict)
 			case c.readDecompress:
 				c.reader = c.newDecompressionReader(c.reader, nil)
 			}
@@ -1048,7 +1049,7 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 
 	// if context-takeover add payload to dictionary
 	if c.contextTakeover {
-		c.AddDict(p)
+		c.AddRxDict(p)
 	}
 
 	return messageType, p, err
@@ -1167,17 +1168,31 @@ func (c *Conn) SetCompressionLevel(level int) error {
 	return nil
 }
 
-func (c *Conn) AddDict(b []byte) {
+func (c *Conn) AddTxDict(b []byte) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	// Todo I do not know whether to leave the dictionary with 32768 bytes or more
 	// If it is recognized as a duplicate character string,
 	// deleting a part of the character may make it impossible to decrypt it.
-	c.dict = append(b, c.dict...)
+	c.txDict = append(b, c.txDict...)
 
-	if len(c.dict) > maxWindowBits {
-		c.dict = c.dict[:maxWindowBits]
+	if len(c.txDict) > maxWindowBits {
+		c.txDict = c.txDict[:maxWindowBits]
+	}
+}
+
+func (c *Conn) AddRxDict(b []byte) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	// Todo I do not know whether to leave the dictionary with 32768 bytes or more
+	// If it is recognized as a duplicate character string,
+	// deleting a part of the character may make it impossible to decrypt it.
+	c.rxDict = append(b, c.rxDict...)
+
+	if len(c.rxDict) > maxWindowBits {
+		c.rxDict = c.rxDict[:maxWindowBits]
 	}
 }
 
