@@ -53,7 +53,7 @@ func isValidCompressionLevel(level int) bool {
 	return minCompressionLevel <= level && level <= maxCompressionLevel
 }
 
-func compressNoContextTakeover(w io.WriteCloser, level int) io.WriteCloser {
+func compressNoContextTakeover(w io.WriteCloser, level int, dict []byte) io.WriteCloser {
 	p := &flateWriterPools[level-minCompressionLevel]
 	tw := &truncWriter{w: w}
 	fw, _ := p.Get().(*flate.Writer)
@@ -65,15 +65,14 @@ func compressNoContextTakeover(w io.WriteCloser, level int) io.WriteCloser {
 	return &flateWriteWrapper{fw: fw, tw: tw, p: p}
 }
 
-func compressContextTakeover(w io.WriteCloser, level int) io.WriteCloser {
+func compressContextTakeover(w io.WriteCloser, level int, dict []byte) io.WriteCloser {
 	p := &flateWriterPools[level-minCompressionLevel]
 	tw := &truncWriter{w: w}
-	fw, _ := p.Get().(*flate.Writer)
-	if fw == nil {
-		fw, _ = flate.NewWriter(tw, level)
-	} else {
-		fw.Reset(tw)
-	}
+
+	// WriterDict's Reset just restores the dictionary.
+	// Initialization is done with New. (If possible get struct from sync.Pool)
+	fw, _ := flate.NewWriterDict(tw, level, dict)
+
 	return &flateWriteWrapper{fw: fw, tw: tw, p: p}
 }
 
