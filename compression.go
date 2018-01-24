@@ -25,7 +25,7 @@ var (
 	}}
 )
 
-func decompressNoContextTakeover(r io.Reader, b []byte) io.ReadCloser {
+func decompressNoContextTakeover(r io.Reader, dict []byte) io.ReadCloser {
 	const tail =
 	// Add four bytes as specified in RFC
 	"\x00\x00\xff\xff" +
