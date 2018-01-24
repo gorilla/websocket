@@ -267,7 +267,6 @@ type Conn struct {
 	contextTakeover bool
 	txDict          []byte
 	rxDict          []byte
-	mutex           sync.RWMutex
 }
 
 func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) *Conn {
@@ -1168,13 +1167,8 @@ func (c *Conn) SetCompressionLevel(level int) error {
 	return nil
 }
 
+// AddTxDict adds payload to txDict.
 func (c *Conn) AddTxDict(b []byte) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	// Todo I do not know whether to leave the dictionary with 32768 bytes or more
-	// If it is recognized as a duplicate character string,
-	// deleting a part of the character may make it impossible to decrypt it.
 	c.txDict = append(b, c.txDict...)
 
 	if len(c.txDict) > maxWindowBits {
@@ -1182,13 +1176,8 @@ func (c *Conn) AddTxDict(b []byte) {
 	}
 }
 
+// AddTxDict adds payload to rxDict.
 func (c *Conn) AddRxDict(b []byte) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	// Todo I do not know whether to leave the dictionary with 32768 bytes or more
-	// If it is recognized as a duplicate character string,
-	// deleting a part of the character may make it impossible to decrypt it.
 	c.rxDict = append(b, c.rxDict...)
 
 	if len(c.rxDict) > maxWindowBits {
