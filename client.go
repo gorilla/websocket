@@ -78,6 +78,11 @@ type Dialer struct {
 	// takeover" modes are supported.
 	EnableCompression bool
 
+	// EnableContextTakeover specifies specifies if the client should attempt to negotiate
+	// per message compression with context-takeover (RFC 7692).
+	// but window bits is allowed only 15, because go's flate library support 15 bits only.
+	EnableContextTakeover bool
+
 	// Jar specifies the cookie jar.
 	// If Jar is nil, cookies are not sent in requests and ignored
 	// in responses.
@@ -196,7 +201,10 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		}
 	}
 
-	if d.EnableCompression {
+	switch {
+	case d.EnableCompression && d.EnableContextTakeover:
+		req.Header.Set("Sec-Websocket-Extensions", "permessage-deflate; server_max_window_bits=15; client_max_window_bits=15")
+	case d.EnableCompression:
 		req.Header.Set("Sec-Websocket-Extensions", "permessage-deflate; server_no_context_takeover; client_no_context_takeover")
 	}
 
@@ -307,13 +315,20 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		if ext[""] != "permessage-deflate" {
 			continue
 		}
-		_, snct := ext["server_no_context_takeover"]
-		_, cnct := ext["client_no_context_takeover"]
-		if !snct || !cnct {
-			return nil, resp, errInvalidCompression
+
+		_, cmwb := ext["client_max_window_bits"]
+		_, smwb := ext["server_max_window_bits"]
+
+		switch {
+		case cmwb && smwb:
+			conn.contextTakeover = true
+			conn.newCompressionWriter = compressContextTakeover
+			conn.newDecompressionReader = decompressContextTakeover
+		default:
+			conn.newCompressionWriter = compressNoContextTakeover
+			conn.newDecompressionReader = decompressNoContextTakeover
 		}
-		conn.newCompressionWriter = compressNoContextTakeover
-		conn.newDecompressionReader = decompressNoContextTakeover
+
 		break
 	}
 
