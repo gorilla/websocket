@@ -38,6 +38,8 @@ const (
 
 	continuationFrame = 0
 	noFrame           = -1
+
+	maxWindowBits = 1 << 15
 )
 
 // Close codes defined in RFC 6455, section 11.7.
@@ -259,8 +261,12 @@ type Conn struct {
 	readErrCount  int
 	messageReader *messageReader // the current low-level reader
 
-	readDecompress         bool // whether last read frame had RSV1 set
-	newDecompressionReader func(io.Reader) io.ReadCloser
+	readDecompress         bool                                  // whether last read frame had RSV1 set
+	newDecompressionReader func(io.Reader, []byte) io.ReadCloser // arges may flateReadWrapper struct
+
+	contextTakeover bool
+	dict            []byte
+	mutex           sync.RWMutex
 }
 
 func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) *Conn {
@@ -945,9 +951,14 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 		if frameType == TextMessage || frameType == BinaryMessage {
 			c.messageReader = &messageReader{c}
 			c.reader = c.messageReader
-			if c.readDecompress {
-				c.reader = c.newDecompressionReader(c.reader)
+
+			switch {
+			case c.readDecompress && c.contextTakeover:
+				c.reader = c.newDecompressionReader(c.reader, c.dict)
+			case c.readDecompress:
+				c.reader = c.newDecompressionReader(c.reader, nil)
 			}
+
 			return frameType, c.reader, nil
 		}
 	}
@@ -974,9 +985,11 @@ func (r *messageReader) Read(b []byte) (int, error) {
 	for c.readErr == nil {
 
 		if c.readRemaining > 0 {
+			// Determine the size of the data to be read.
 			if int64(len(b)) > c.readRemaining {
 				b = b[:c.readRemaining]
 			}
+
 			n, err := c.br.Read(b)
 			c.readErr = hideTempErr(err)
 			if c.isServer {
@@ -986,6 +999,7 @@ func (r *messageReader) Read(b []byte) (int, error) {
 			if c.readRemaining > 0 && c.readErr == io.EOF {
 				c.readErr = errUnexpectedEOF
 			}
+
 			return n, c.readErr
 		}
 
@@ -1023,6 +1037,12 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 		return messageType, nil, err
 	}
 	p, err = ioutil.ReadAll(r)
+
+	// if context-takeover add payload to dictionary
+	if c.contextTakeover {
+		c.AddDict(p)
+	}
+
 	return messageType, p, err
 }
 
@@ -1137,6 +1157,20 @@ func (c *Conn) SetCompressionLevel(level int) error {
 	}
 	c.compressionLevel = level
 	return nil
+}
+
+func (c *Conn) AddDict(b []byte) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	// Todo I do not know whether to leave the dictionary with 32768 bytes or more
+	// If it is recognized as a duplicate character string,
+	// deleting a part of the character may make it impossible to decrypt it.
+	c.dict = append(b, c.dict...)
+
+	if len(c.dict) > maxWindowBits {
+		c.dict = c.dict[:maxWindowBits]
+	}
 }
 
 // FormatCloseMessage formats closeCode and text as a WebSocket close message.
