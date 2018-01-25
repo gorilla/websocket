@@ -1169,19 +1169,21 @@ func (c *Conn) SetCompressionLevel(level int) error {
 
 // AddTxDict adds payload to txDict.
 func (c *Conn) AddTxDict(b []byte) {
-	c.txDict = append(b, c.txDict...)
+	c.txDict = append(c.txDict, b...)
 
 	if len(c.txDict) > maxWindowBits {
-		c.txDict = c.txDict[:maxWindowBits]
+		offset := len(c.txDict) - maxWindowBits
+		c.txDict = c.txDict[offset:]
 	}
 }
 
 // AddTxDict adds payload to rxDict.
 func (c *Conn) AddRxDict(b []byte) {
-	c.rxDict = append(b, c.rxDict...)
+	c.rxDict = append(c.rxDict, b...)
 
 	if len(c.rxDict) > maxWindowBits {
-		c.rxDict = c.rxDict[:maxWindowBits]
+		offset := len(c.rxDict) - maxWindowBits
+		c.rxDict = c.rxDict[offset:]
 	}
 }
 
