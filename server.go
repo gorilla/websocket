@@ -44,8 +44,12 @@ type Upgrader struct {
 	Error func(w http.ResponseWriter, r *http.Request, status int, reason error)
 
 	// CheckOrigin returns true if the request Origin header is acceptable. If
-	// CheckOrigin is nil, the host in the Origin header must not be set or
-	// must match the host of the request.
+	// CheckOrigin is nil, then a safe default is used: return false if the
+	// Origin request header is present and the origin host is not equal to
+	// request Host header.
+	//
+	// A CheckOrigin function should carefully validate the request origin to
+	// prevent cross-site request forgery.
 	CheckOrigin func(r *http.Request) bool
 
 	// EnableCompression specify if the server should attempt to negotiate per
@@ -131,7 +135,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		checkOrigin = checkSameOrigin
 	}
 	if !checkOrigin(r) {
-		return u.returnError(w, r, http.StatusForbidden, "websocket: 'Origin' header value not allowed")
+		return u.returnError(w, r, http.StatusForbidden, "websocket: request origin not allowed by Upgrader.CheckOrigin")
 	}
 
 	challengeKey := r.Header.Get("Sec-Websocket-Key")
