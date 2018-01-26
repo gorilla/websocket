@@ -142,6 +142,45 @@ func sendRecv(t *testing.T, ws *Conn) {
 	}
 }
 
+func multipleSendRecv(t *testing.T, ws *Conn) {
+	message := "Hello World!"
+	if err := ws.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetWriteDeadline: %v", err)
+	}
+	if err := ws.WriteMessage(TextMessage, []byte(message)); err != nil {
+		t.Fatalf("WriteMessage: %v", err)
+	}
+	if err := ws.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
+	_, p, err := ws.ReadMessage()
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+	if string(p) != message {
+		t.Fatalf("message=%s, want %s", p, message)
+	}
+
+	message_2 := "Can you read message?"
+	if err := ws.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetWriteDeadline: %v", err)
+	}
+	if err := ws.WriteMessage(TextMessage, []byte(message_2)); err != nil {
+		t.Fatalf("_WriteMessage: %v", err)
+	}
+	if err := ws.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("_SetReadDeadline: %v", err)
+	}
+
+	_, p, err = ws.ReadMessage()
+	if err != nil {
+		t.Fatalf("_ReadMessage: %v", err) // _ReadMessage: websocket: close 1006 (abnormal closure): unexpected EOF
+	}
+	if string(p) != message {
+		t.Fatalf("_message=%s, want %s", p, message_2)
+	}
+}
+
 func TestProxyDial(t *testing.T) {
 
 	s := newServer(t)
@@ -520,6 +559,23 @@ func TestDialCompression(t *testing.T) {
 	}
 	defer ws.Close()
 	sendRecv(t, ws)
+}
+
+func TestDialCompressionOfContextTakeover(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	dialer := cstDialer
+	dialer.EnableCompression = true
+	dialer.EnableContextTakeover = true
+	ws, _, err := dialer.Dial(s.URL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer ws.Close()
+
+	// Todo multiple send and receive.
+	multipleSendRecv(t, ws)
 }
 
 func TestSocksProxyDial(t *testing.T) {
