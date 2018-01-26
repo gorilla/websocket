@@ -19,8 +19,9 @@ const (
 )
 
 var (
-	flateWriterPools [maxCompressionLevel - minCompressionLevel + 1]sync.Pool
-	flateReaderPool  = sync.Pool{New: func() interface{} {
+	flateWriterPools     [maxCompressionLevel - minCompressionLevel + 1]sync.Pool
+	flateWriterDictPools [maxCompressionLevel - minCompressionLevel + 1]sync.Pool
+	flateReaderPool      = sync.Pool{New: func() interface{} {
 		return flate.NewReader(nil)
 	}}
 )
@@ -66,12 +67,16 @@ func compressNoContextTakeover(w io.WriteCloser, level int, dict []byte) io.Writ
 }
 
 func compressContextTakeover(w io.WriteCloser, level int, dict []byte) io.WriteCloser {
-	p := &flateWriterPools[level-minCompressionLevel]
+	p := &flateWriterDictPools[level-minCompressionLevel]
 	tw := &truncWriter{w: w}
 
-	// WriterDict's Reset just restores the dictionary.
-	// Initialization is done with New. (If possible get struct from sync.Pool)
-	fw, _ := flate.NewWriterDict(tw, level, dict)
+	fw, _ := p.Get().(*flate.Writer)
+	if fw == nil {
+		// use WriterDict
+		fw, _ = flate.NewWriterDict(tw, level, dict)
+	} else {
+		fw.Reset(tw)
+	}
 
 	return &flateWriteWrapper{fw: fw, tw: tw, p: p}
 }

@@ -65,6 +65,20 @@ func BenchmarkWriteWithCompression(b *testing.B) {
 	b.ReportAllocs()
 }
 
+func BenchmarkWriteWithCompressionOfContextTakeover(b *testing.B) {
+	w := ioutil.Discard
+	c := newConn(fakeNetConn{Reader: nil, Writer: w}, false, 1024, 1024)
+	messages := textMessages(100)
+	c.enableWriteCompression = true
+	c.contextTakeover = true
+	c.newCompressionWriter = compressContextTakeover
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.WriteMessage(TextMessage, messages[i%len(messages)])
+	}
+	b.ReportAllocs()
+}
+
 func TestValidCompressionLevel(t *testing.T) {
 	c := newConn(fakeNetConn{}, false, 1024, 1024)
 	for _, level := range []int{minCompressionLevel - 1, maxCompressionLevel + 1} {
