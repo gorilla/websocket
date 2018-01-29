@@ -46,12 +46,7 @@ func decompressContextTakeover(r io.Reader, dict *[]byte) io.ReadCloser {
 		"\x01\x00\x00\xff\xff"
 
 	fr, _ := flateReaderPool.Get().(io.ReadCloser)
-
-	if dict != nil {
-		fr.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), *dict)
-	} else {
-		fr.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), nil)
-	}
+	fr.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), *dict)
 
 	return &flateReadWrapper{fr: fr, hasDict: true, dict: dict}
 }
@@ -75,13 +70,7 @@ func compressNoContextTakeover(w io.WriteCloser, level int, dict *[]byte) io.Wri
 func compressContextTakeover(w io.WriteCloser, level int, dict *[]byte) io.WriteCloser {
 	tw := &truncWriter{w: w}
 
-	var fw *flate.Writer
-
-	if dict != nil {
-		fw, _ = flate.NewWriterDict(tw, level, *dict)
-	} else {
-		fw, _ = flate.NewWriterDict(tw, level, nil)
-	}
+	fw, _ := flate.NewWriterDict(tw, level, *dict)
 
 	return &flateWriteWrapper{fw: fw, tw: tw, hasDict: true, dict: dict}
 }
