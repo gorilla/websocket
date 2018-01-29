@@ -494,14 +494,3 @@ func TestBufioReuse(t *testing.T) {
 	}
 
 }
-
-func BenchmarkAddDict(b *testing.B) {
-	w := ioutil.Discard
-	c := newConn(fakeNetConn{Reader: nil, Writer: w}, false, 1024, 1024)
-	messages := textMessages(100)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		c.AddRxDict(messages[i%len(messages)])
-	}
-	b.ReportAllocs()
-}

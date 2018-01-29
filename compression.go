@@ -26,7 +26,7 @@ var (
 	}}
 )
 
-func decompressNoContextTakeover(r io.Reader, dict []byte) io.ReadCloser {
+func decompressNoContextTakeover(r io.Reader, dict *[]byte) io.ReadCloser {
 	const tail =
 	// Add four bytes as specified in RFC
 	"\x00\x00\xff\xff" +
@@ -35,10 +35,10 @@ func decompressNoContextTakeover(r io.Reader, dict []byte) io.ReadCloser {
 
 	fr, _ := flateReaderPool.Get().(io.ReadCloser)
 	fr.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), nil)
-	return &flateReadWrapper{fr}
+	return &flateReadWrapper{fr: fr}
 }
 
-func decompressContextTakeover(r io.Reader, dict []byte) io.ReadCloser {
+func decompressContextTakeover(r io.Reader, dict *[]byte) io.ReadCloser {
 	const tail =
 	// Add four bytes as specified in RFC
 	"\x00\x00\xff\xff" +
@@ -46,15 +46,21 @@ func decompressContextTakeover(r io.Reader, dict []byte) io.ReadCloser {
 		"\x01\x00\x00\xff\xff"
 
 	fr, _ := flateReaderPool.Get().(io.ReadCloser)
-	fr.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), dict)
-	return &flateReadWrapper{fr}
+
+	if dict != nil {
+		fr.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), *dict)
+	} else {
+		fr.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), nil)
+	}
+
+	return &flateReadWrapper{fr: fr, hasDict: true, dict: dict}
 }
 
 func isValidCompressionLevel(level int) bool {
 	return minCompressionLevel <= level && level <= maxCompressionLevel
 }
 
-func compressNoContextTakeover(w io.WriteCloser, level int, dict []byte) io.WriteCloser {
+func compressNoContextTakeover(w io.WriteCloser, level int, dict *[]byte) io.WriteCloser {
 	p := &flateWriterPools[level-minCompressionLevel]
 	tw := &truncWriter{w: w}
 	fw, _ := p.Get().(*flate.Writer)
@@ -66,19 +72,18 @@ func compressNoContextTakeover(w io.WriteCloser, level int, dict []byte) io.Writ
 	return &flateWriteWrapper{fw: fw, tw: tw, p: p}
 }
 
-func compressContextTakeover(w io.WriteCloser, level int, dict []byte) io.WriteCloser {
-	p := &flateWriterDictPools[level-minCompressionLevel]
+func compressContextTakeover(w io.WriteCloser, level int, dict *[]byte) io.WriteCloser {
 	tw := &truncWriter{w: w}
 
-	fw, _ := p.Get().(*flate.Writer)
-	if fw == nil {
-		// use WriterDict
-		fw, _ = flate.NewWriterDict(tw, level, dict)
+	var fw *flate.Writer
+
+	if dict != nil {
+		fw, _ = flate.NewWriterDict(tw, level, *dict)
 	} else {
-		fw.Reset(tw)
+		fw, _ = flate.NewWriterDict(tw, level, nil)
 	}
 
-	return &flateWriteWrapper{fw: fw, tw: tw, p: p}
+	return &flateWriteWrapper{fw: fw, tw: tw, hasDict: true, dict: dict}
 }
 
 // truncWriter is an io.Writer that writes all but the last four bytes of the
@@ -121,12 +126,20 @@ type flateWriteWrapper struct {
 	fw *flate.Writer
 	tw *truncWriter
 	p  *sync.Pool
+
+	hasDict bool
+	dict    *[]byte
 }
 
 func (w *flateWriteWrapper) Write(p []byte) (int, error) {
 	if w.fw == nil {
 		return 0, errWriteClosed
 	}
+
+	if w.hasDict {
+		w.addDict(p)
+	}
+
 	return w.fw.Write(p)
 }
 
@@ -135,7 +148,11 @@ func (w *flateWriteWrapper) Close() error {
 		return errWriteClosed
 	}
 	err1 := w.fw.Flush()
-	w.p.Put(w.fw)
+
+	if !w.hasDict {
+		w.p.Put(w.fw)
+	}
+
 	w.fw = nil
 	if w.tw.p != [4]byte{0, 0, 0xff, 0xff} {
 		return errors.New("websocket: internal error, unexpected bytes at end of flate stream")
@@ -147,8 +164,21 @@ func (w *flateWriteWrapper) Close() error {
 	return err2
 }
 
+// addDict adds payload to dict.
+func (w *flateWriteWrapper) addDict(b []byte) {
+	*w.dict = append(*w.dict, b...)
+
+	if len(*w.dict) > maxWindowBits {
+		offset := len(*w.dict) - maxWindowBits
+		*w.dict = (*w.dict)[offset:]
+	}
+}
+
 type flateReadWrapper struct {
 	fr io.ReadCloser // flate.NewReader
+
+	hasDict bool
+	dict    *[]byte
 }
 
 func (r *flateReadWrapper) Read(p []byte) (int, error) {
@@ -164,6 +194,13 @@ func (r *flateReadWrapper) Read(p []byte) (int, error) {
 		// this final read.
 		r.Close()
 	}
+
+	if r.hasDict {
+		if n > 0 {
+			r.addDict(p[:n])
+		}
+	}
+
 	return n, err
 }
 
@@ -172,7 +209,21 @@ func (r *flateReadWrapper) Close() error {
 		return io.ErrClosedPipe
 	}
 	err := r.fr.Close()
-	flateReaderPool.Put(r.fr)
+
+	if !r.hasDict {
+		flateReaderPool.Put(r.fr)
+	}
+
 	r.fr = nil
 	return err
+}
+
+// addDict adds payload to dict.
+func (r *flateReadWrapper) addDict(b []byte) {
+	*r.dict = append(*r.dict, b...)
+
+	if len(*r.dict) > maxWindowBits {
+		offset := len(*r.dict) - maxWindowBits
+		*r.dict = (*r.dict)[offset:]
+	}
 }

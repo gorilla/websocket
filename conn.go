@@ -243,7 +243,7 @@ type Conn struct {
 
 	enableWriteCompression bool
 	compressionLevel       int
-	newCompressionWriter   func(io.WriteCloser, int, []byte) io.WriteCloser
+	newCompressionWriter   func(io.WriteCloser, int, *[]byte) io.WriteCloser
 
 	// Read fields
 	reader        io.ReadCloser // the current reader returned to the application
@@ -261,12 +261,12 @@ type Conn struct {
 	readErrCount  int
 	messageReader *messageReader // the current low-level reader
 
-	readDecompress         bool                                  // whether last read frame had RSV1 set
-	newDecompressionReader func(io.Reader, []byte) io.ReadCloser // arges may flateReadWrapper struct
+	readDecompress         bool                                   // whether last read frame had RSV1 set
+	newDecompressionReader func(io.Reader, *[]byte) io.ReadCloser // arges may flateReadWrapper struct
 
 	contextTakeover bool
-	txDict          []byte
-	rxDict          []byte
+	txDict          *[]byte
+	rxDict          *[]byte
 }
 
 func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) *Conn {
@@ -336,6 +336,9 @@ func newConnBRW(conn net.Conn, isServer bool, readBufferSize, writeBufferSize in
 		writeBuf:               writeBuf,
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
+
+		txDict: &[]byte{},
+		rxDict: &[]byte{},
 	}
 	c.SetCloseHandler(nil)
 	c.SetPingHandler(nil)
@@ -763,9 +766,6 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 	if _, err = w.Write(data); err != nil {
 		return err
 	}
-	if c.contextTakeover {
-		c.AddTxDict(data)
-	}
 	return w.Close()
 }
 
@@ -1046,11 +1046,6 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 	}
 	p, err = ioutil.ReadAll(r)
 
-	// if context-takeover add payload to dictionary
-	if c.contextTakeover {
-		c.AddRxDict(p)
-	}
-
 	return messageType, p, err
 }
 
@@ -1165,26 +1160,6 @@ func (c *Conn) SetCompressionLevel(level int) error {
 	}
 	c.compressionLevel = level
 	return nil
-}
-
-// AddTxDict adds payload to txDict.
-func (c *Conn) AddTxDict(b []byte) {
-	c.txDict = append(c.txDict, b...)
-
-	if len(c.txDict) > maxWindowBits {
-		offset := len(c.txDict) - maxWindowBits
-		c.txDict = c.txDict[offset:]
-	}
-}
-
-// AddTxDict adds payload to rxDict.
-func (c *Conn) AddRxDict(b []byte) {
-	c.rxDict = append(c.rxDict, b...)
-
-	if len(c.rxDict) > maxWindowBits {
-		offset := len(c.rxDict) - maxWindowBits
-		c.rxDict = c.rxDict[offset:]
-	}
 }
 
 // FormatCloseMessage formats closeCode and text as a WebSocket close message.
