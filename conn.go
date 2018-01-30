@@ -38,6 +38,8 @@ const (
 
 	continuationFrame = 0
 	noFrame           = -1
+
+	maxWindowBits = 1 << 15
 )
 
 // Close codes defined in RFC 6455, section 11.7.
@@ -259,8 +261,11 @@ type Conn struct {
 	readErrCount  int
 	messageReader *messageReader // the current low-level reader
 
-	readDecompress         bool // whether last read frame had RSV1 set
-	newDecompressionReader func(io.Reader) io.ReadCloser
+	readDecompress         bool                                   // whether last read frame had RSV1 set
+	newDecompressionReader func(io.Reader, *[]byte) io.ReadCloser // arges may flateReadWrapper struct
+
+	contextTakeover bool
+	rxDict          *[]byte
 }
 
 func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) *Conn {
@@ -330,6 +335,8 @@ func newConnBRW(conn net.Conn, isServer bool, readBufferSize, writeBufferSize in
 		writeBuf:               writeBuf,
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
+
+		rxDict: &[]byte{},
 	}
 	c.SetCloseHandler(nil)
 	c.SetPingHandler(nil)
@@ -499,9 +506,8 @@ func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
 	}
 	c.writer = mw
 	if c.newCompressionWriter != nil && c.enableWriteCompression && isData(messageType) {
-		w := c.newCompressionWriter(c.writer, c.compressionLevel)
 		mw.compress = true
-		c.writer = w
+		c.writer = c.newCompressionWriter(c.writer, c.compressionLevel)
 	}
 	return c.writer, nil
 }
@@ -945,9 +951,14 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 		if frameType == TextMessage || frameType == BinaryMessage {
 			c.messageReader = &messageReader{c}
 			c.reader = c.messageReader
-			if c.readDecompress {
-				c.reader = c.newDecompressionReader(c.reader)
+
+			switch {
+			case c.readDecompress && c.contextTakeover:
+				c.reader = c.newDecompressionReader(c.reader, c.rxDict)
+			case c.readDecompress:
+				c.reader = c.newDecompressionReader(c.reader, nil)
 			}
+
 			return frameType, c.reader, nil
 		}
 	}
@@ -974,9 +985,11 @@ func (r *messageReader) Read(b []byte) (int, error) {
 	for c.readErr == nil {
 
 		if c.readRemaining > 0 {
+			// Determine the size of the data to be read.
 			if int64(len(b)) > c.readRemaining {
 				b = b[:c.readRemaining]
 			}
+
 			n, err := c.br.Read(b)
 			c.readErr = hideTempErr(err)
 			if c.isServer {
@@ -986,6 +999,7 @@ func (r *messageReader) Read(b []byte) (int, error) {
 			if c.readRemaining > 0 && c.readErr == io.EOF {
 				c.readErr = errUnexpectedEOF
 			}
+
 			return n, c.readErr
 		}
 
@@ -1023,6 +1037,7 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 		return messageType, nil, err
 	}
 	p, err = ioutil.ReadAll(r)
+
 	return messageType, p, err
 }
 

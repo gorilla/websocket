@@ -5,11 +5,12 @@
 package websocket
 
 import (
-	"compress/flate"
 	"errors"
 	"io"
 	"strings"
 	"sync"
+
+	"compress/flate"
 )
 
 const (
@@ -19,13 +20,14 @@ const (
 )
 
 var (
-	flateWriterPools [maxCompressionLevel - minCompressionLevel + 1]sync.Pool
-	flateReaderPool  = sync.Pool{New: func() interface{} {
+	flateWriterPools     [maxCompressionLevel - minCompressionLevel + 1]sync.Pool
+	flateWriterDictPools [maxCompressionLevel - minCompressionLevel + 1]sync.Pool
+	flateReaderPool      = sync.Pool{New: func() interface{} {
 		return flate.NewReader(nil)
 	}}
 )
 
-func decompressNoContextTakeover(r io.Reader) io.ReadCloser {
+func decompressNoContextTakeover(r io.Reader, dict *[]byte) io.ReadCloser {
 	const tail =
 	// Add four bytes as specified in RFC
 	"\x00\x00\xff\xff" +
@@ -34,7 +36,20 @@ func decompressNoContextTakeover(r io.Reader) io.ReadCloser {
 
 	fr, _ := flateReaderPool.Get().(io.ReadCloser)
 	fr.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), nil)
-	return &flateReadWrapper{fr}
+	return &flateReadWrapper{fr: fr}
+}
+
+func decompressContextTakeover(r io.Reader, dict *[]byte) io.ReadCloser {
+	const tail =
+	// Add four bytes as specified in RFC
+	"\x00\x00\xff\xff" +
+		// Add final block to squelch unexpected EOF error from flate reader.
+		"\x01\x00\x00\xff\xff"
+
+	fr, _ := flateReaderPool.Get().(io.ReadCloser)
+	fr.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), *dict)
+
+	return &flateReadWrapper{fr: fr, hasDict: true, dict: dict}
 }
 
 func isValidCompressionLevel(level int) bool {
@@ -47,6 +62,18 @@ func compressNoContextTakeover(w io.WriteCloser, level int) io.WriteCloser {
 	fw, _ := p.Get().(*flate.Writer)
 	if fw == nil {
 		fw, _ = flate.NewWriter(tw, level)
+	} else {
+		fw.Reset(tw)
+	}
+	return &flateWriteWrapper{fw: fw, tw: tw, p: p}
+}
+
+func compressContextTakeover(w io.WriteCloser, level int) io.WriteCloser {
+	p := &flateWriterDictPools[level-minCompressionLevel]
+	tw := &truncWriter{w: w}
+	fw, _ := p.Get().(*flate.Writer)
+	if fw == nil {
+		fw, _ = flate.NewWriterDict(tw, level, []byte{})
 	} else {
 		fw.Reset(tw)
 	}
@@ -99,6 +126,7 @@ func (w *flateWriteWrapper) Write(p []byte) (int, error) {
 	if w.fw == nil {
 		return 0, errWriteClosed
 	}
+
 	return w.fw.Write(p)
 }
 
@@ -107,7 +135,9 @@ func (w *flateWriteWrapper) Close() error {
 		return errWriteClosed
 	}
 	err1 := w.fw.Flush()
+
 	w.p.Put(w.fw)
+
 	w.fw = nil
 	if w.tw.p != [4]byte{0, 0, 0xff, 0xff} {
 		return errors.New("websocket: internal error, unexpected bytes at end of flate stream")
@@ -120,20 +150,32 @@ func (w *flateWriteWrapper) Close() error {
 }
 
 type flateReadWrapper struct {
-	fr io.ReadCloser
+	fr io.ReadCloser // flate.NewReader
+
+	hasDict bool
+	dict    *[]byte
 }
 
 func (r *flateReadWrapper) Read(p []byte) (int, error) {
 	if r.fr == nil {
 		return 0, io.ErrClosedPipe
 	}
+
 	n, err := r.fr.Read(p)
+
 	if err == io.EOF {
 		// Preemptively place the reader back in the pool. This helps with
 		// scenarios where the application does not call NextReader() soon after
 		// this final read.
 		r.Close()
 	}
+
+	if r.hasDict {
+		if n > 0 {
+			r.addDict(p[:n])
+		}
+	}
+
 	return n, err
 }
 
@@ -142,7 +184,21 @@ func (r *flateReadWrapper) Close() error {
 		return io.ErrClosedPipe
 	}
 	err := r.fr.Close()
-	flateReaderPool.Put(r.fr)
+
+	if !r.hasDict {
+		flateReaderPool.Put(r.fr)
+	}
+
 	r.fr = nil
 	return err
+}
+
+// addDict adds payload to dict.
+func (r *flateReadWrapper) addDict(b []byte) {
+	*r.dict = append(*r.dict, b...)
+
+	if len(*r.dict) > maxWindowBits {
+		offset := len(*r.dict) - maxWindowBits
+		*r.dict = (*r.dict)[offset:]
+	}
 }

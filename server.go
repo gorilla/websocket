@@ -146,14 +146,21 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	subprotocol := u.selectSubprotocol(r, responseHeader)
 
 	// Negotiate PMCE
-	var compress bool
+	var (
+		compress        bool
+		contextTakeover bool
+	)
 	if u.EnableCompression {
 		for _, ext := range parseExtensions(r.Header) {
-			if ext[""] != "permessage-deflate" {
-				continue
+			// map[string]string{"":"permessage-deflate", "client_max_window_bits":""}
+			// detect context-takeover from client_max_window_bits
+			if ext[""] == "permessage-deflate" {
+				compress = true
 			}
-			compress = true
-			break
+
+			if _, ok := ext["client_max_window_bits"]; ok {
+				contextTakeover = true
+			}
 		}
 	}
 
@@ -181,8 +188,15 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	c.subprotocol = subprotocol
 
 	if compress {
-		c.newCompressionWriter = compressNoContextTakeover
-		c.newDecompressionReader = decompressNoContextTakeover
+		switch {
+		case contextTakeover:
+			c.contextTakeover = contextTakeover
+			c.newCompressionWriter = compressContextTakeover
+			c.newDecompressionReader = decompressContextTakeover
+		default:
+			c.newCompressionWriter = compressNoContextTakeover
+			c.newDecompressionReader = decompressNoContextTakeover
+		}
 	}
 
 	p := c.writeBuf[:0]
@@ -195,7 +209,12 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		p = append(p, "\r\n"...)
 	}
 	if compress {
-		p = append(p, "Sec-Websocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover\r\n"...)
+		switch {
+		case contextTakeover:
+			p = append(p, "Sec-Websocket-Extensions: permessage-deflate; server_max_window_bits=15; client_max_window_bits=15\r\n"...)
+		default:
+			p = append(p, "Sec-Websocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover\r\n"...)
+		}
 	}
 	for k, vs := range responseHeader {
 		if k == "Sec-Websocket-Protocol" {
