@@ -243,7 +243,7 @@ type Conn struct {
 
 	enableWriteCompression bool
 	compressionLevel       int
-	newCompressionWriter   func(io.WriteCloser, int, *[]byte) io.WriteCloser
+	newCompressionWriter   func(io.WriteCloser, int) io.WriteCloser
 
 	// Read fields
 	reader        io.ReadCloser // the current reader returned to the application
@@ -265,7 +265,6 @@ type Conn struct {
 	newDecompressionReader func(io.Reader, *[]byte) io.ReadCloser // arges may flateReadWrapper struct
 
 	contextTakeover bool
-	txDict          *[]byte
 	rxDict          *[]byte
 }
 
@@ -337,7 +336,6 @@ func newConnBRW(conn net.Conn, isServer bool, readBufferSize, writeBufferSize in
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
 
-		txDict: &[]byte{},
 		rxDict: &[]byte{},
 	}
 	c.SetCloseHandler(nil)
@@ -509,13 +507,7 @@ func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
 	c.writer = mw
 	if c.newCompressionWriter != nil && c.enableWriteCompression && isData(messageType) {
 		mw.compress = true
-		switch {
-		case c.contextTakeover:
-			c.writer = c.newCompressionWriter(c.writer, c.compressionLevel, c.txDict)
-		// no-context-takeover
-		default:
-			c.writer = c.newCompressionWriter(c.writer, c.compressionLevel, nil)
-		}
+		c.writer = c.newCompressionWriter(c.writer, c.compressionLevel)
 	}
 	return c.writer, nil
 }

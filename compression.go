@@ -5,11 +5,12 @@
 package websocket
 
 import (
-	"compress/flate"
 	"errors"
 	"io"
 	"strings"
 	"sync"
+
+	"compress/flate"
 )
 
 const (
@@ -55,7 +56,7 @@ func isValidCompressionLevel(level int) bool {
 	return minCompressionLevel <= level && level <= maxCompressionLevel
 }
 
-func compressNoContextTakeover(w io.WriteCloser, level int, dict *[]byte) io.WriteCloser {
+func compressNoContextTakeover(w io.WriteCloser, level int) io.WriteCloser {
 	p := &flateWriterPools[level-minCompressionLevel]
 	tw := &truncWriter{w: w}
 	fw, _ := p.Get().(*flate.Writer)
@@ -67,12 +68,16 @@ func compressNoContextTakeover(w io.WriteCloser, level int, dict *[]byte) io.Wri
 	return &flateWriteWrapper{fw: fw, tw: tw, p: p}
 }
 
-func compressContextTakeover(w io.WriteCloser, level int, dict *[]byte) io.WriteCloser {
+func compressContextTakeover(w io.WriteCloser, level int) io.WriteCloser {
+	p := &flateWriterDictPools[level-minCompressionLevel]
 	tw := &truncWriter{w: w}
-
-	fw, _ := flate.NewWriterDict(tw, level, *dict)
-
-	return &flateWriteWrapper{fw: fw, tw: tw, hasDict: true, dict: dict}
+	fw, _ := p.Get().(*flate.Writer)
+	if fw == nil {
+		fw, _ = flate.NewWriterDict(tw, level, []byte{})
+	} else {
+		fw.Reset(tw)
+	}
+	return &flateWriteWrapper{fw: fw, tw: tw, p: p}
 }
 
 // truncWriter is an io.Writer that writes all but the last four bytes of the
@@ -115,18 +120,11 @@ type flateWriteWrapper struct {
 	fw *flate.Writer
 	tw *truncWriter
 	p  *sync.Pool
-
-	hasDict bool
-	dict    *[]byte
 }
 
 func (w *flateWriteWrapper) Write(p []byte) (int, error) {
 	if w.fw == nil {
 		return 0, errWriteClosed
-	}
-
-	if w.hasDict {
-		w.addDict(p)
 	}
 
 	return w.fw.Write(p)
@@ -138,9 +136,7 @@ func (w *flateWriteWrapper) Close() error {
 	}
 	err1 := w.fw.Flush()
 
-	if !w.hasDict {
-		w.p.Put(w.fw)
-	}
+	w.p.Put(w.fw)
 
 	w.fw = nil
 	if w.tw.p != [4]byte{0, 0, 0xff, 0xff} {
@@ -151,16 +147,6 @@ func (w *flateWriteWrapper) Close() error {
 		return err1
 	}
 	return err2
-}
-
-// addDict adds payload to dict.
-func (w *flateWriteWrapper) addDict(b []byte) {
-	*w.dict = append(*w.dict, b...)
-
-	if len(*w.dict) > maxWindowBits {
-		offset := len(*w.dict) - maxWindowBits
-		*w.dict = (*w.dict)[offset:]
-	}
 }
 
 type flateReadWrapper struct {
