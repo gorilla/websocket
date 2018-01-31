@@ -69,17 +69,17 @@ func compressNoContextTakeover(w io.WriteCloser, level int) io.WriteCloser {
 	return &flateWriteWrapper{fw: fw, tw: tw, p: p}
 }
 
-// func compressContextTakeover(w io.WriteCloser, level int) io.WriteCloser {
-// 	p := &flateWriterDictPools[level-minCompressionLevel]
-// 	tw := &truncWriter{w: w}
-// 	fw, _ := p.Get().(*flate.Writer)
-// 	if fw == nil {
-// 		fw, _ = flate.NewWriterDict(tw, level, nil)
-// 	} else {
-// 		fw.Reset(tw)
-// 	}
-// 	return &flateWriteWrapper{fw: fw, tw: tw, p: p}
-// }
+func compressContextTakeover(w io.WriteCloser, level int) io.WriteCloser {
+	// p := &flateWriterDictPools[level-minCompressionLevel]
+	// tw := &truncWriter{w: w}
+	// fw, _ := p.Get().(*flate.Writer)
+	// if fw == nil {
+	// 	fw, _ = flate.NewWriterDict(tw, level, nil)
+	// } else {
+	// 	fw.Reset(tw)
+	// }
+	return &flateWriteWrapper{}
+}
 
 // truncWriter is an io.Writer that writes all but the last four bytes of the
 // stream to another io.Writer.

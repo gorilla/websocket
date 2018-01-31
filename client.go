@@ -322,7 +322,7 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		switch {
 		case cmwb && smwb:
 			conn.contextTakeover = true
-			// conn.newCompressionWriter = compressContextTakeover
+			conn.newCompressionWriter = compressContextTakeover
 			conn.newDecompressionReader = decompressContextTakeover
 		default:
 			conn.newCompressionWriter = compressNoContextTakeover
