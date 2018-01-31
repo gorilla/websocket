@@ -6,8 +6,10 @@ package websocket
 
 import (
 	"bufio"
+	"compress/flate"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -244,6 +246,7 @@ type Conn struct {
 	enableWriteCompression bool
 	compressionLevel       int
 	newCompressionWriter   func(io.WriteCloser, int) io.WriteCloser
+	compressionWriters     map[int]*flateWriteWrapper
 
 	// Read fields
 	reader        io.ReadCloser // the current reader returned to the application
@@ -326,6 +329,8 @@ func newConnBRW(conn net.Conn, isServer bool, readBufferSize, writeBufferSize in
 		writeBuf = make([]byte, writeBufferSize+maxFrameHeaderSize)
 	}
 
+	cw := make(map[int]*flateWriteWrapper, 2)
+
 	c := &Conn{
 		isServer:               isServer,
 		br:                     br,
@@ -335,6 +340,8 @@ func newConnBRW(conn net.Conn, isServer bool, readBufferSize, writeBufferSize in
 		writeBuf:               writeBuf,
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
+
+		compressionWriters: cw,
 
 		rxDict: &[]byte{},
 	}
@@ -507,6 +514,27 @@ func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
 	c.writer = mw
 	if c.newCompressionWriter != nil && c.enableWriteCompression && isData(messageType) {
 		mw.compress = true
+		// For context-takeover, frate.Writer must be set to conn.
+		if c.contextTakeover {
+			if fww, ok := c.compressionWriters[messageType]; ok {
+				// tw := &truncWriter{w: c.writer}
+
+				// Todo: if write
+
+				// fw, _ := flate.NewWriterDict(tw, c.compressionLevel, []byte("Hello"))
+				// fww.fw.Reset(tw)
+				// fww.fw = fw
+				fww.tw.w = c.writer
+				return fww, nil
+			} else {
+				tw := &truncWriter{w: c.writer}
+				fw, _ := flate.NewWriterDict(tw, c.compressionLevel, nil)
+				fww := &flateWriteWrapper{fw: fw, tw: tw, isDictWriter: true}
+				c.compressionWriters[messageType] = fww
+				return fww, nil
+			}
+		}
+
 		c.writer = c.newCompressionWriter(c.writer, c.compressionLevel)
 	}
 	return c.writer, nil
@@ -753,11 +781,16 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 
 	w, err := c.NextWriter(messageType)
 	if err != nil {
+		fmt.Printf("\x1b[31m c.NextWriter %v \x1b[0m\n", err)
 		return err
 	}
-	if _, err = w.Write(data); err != nil {
+	if _, err := w.Write(data); err != nil {
+		fmt.Printf("\x1b[31m w.Write %v \x1b[0m\n", err)
 		return err
 	}
+
+	fmt.Printf("WriteMessage data %v \x1b[0m\n", data)
+	fmt.Printf("\x1b[31m w.Write err %v \x1b[0m\n", err)
 	return w.Close()
 }
 

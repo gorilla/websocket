@@ -187,7 +187,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		switch {
 		case contextTakeover:
 			c.contextTakeover = contextTakeover
-			c.newCompressionWriter = compressContextTakeover
+			// c.newCompressionWriter = compressContextTakeover
 			c.newDecompressionReader = decompressContextTakeover
 		default:
 			c.newCompressionWriter = compressNoContextTakeover
