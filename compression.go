@@ -93,6 +93,7 @@ func (w *truncWriter) Write(p []byte) (int, error) {
 	n := 0
 	fmt.Printf("\x1b[32m Start truncWriter.Write %#v \x1b[0m\n", p)
 	fmt.Printf("\x1b[32m truncWriter w.n -> len %#v \x1b[0m\n", w.n)
+	fmt.Printf("\x1b[32m truncWriter w.p %#v \x1b[0m\n", w.p)
 
 	// fill buffer first for simplicity.
 	if w.n < len(w.p) {
@@ -120,6 +121,7 @@ func (w *truncWriter) Write(p []byte) (int, error) {
 	copy(w.p[len(w.p)-m:], p[len(p)-m:])
 	nn, err := w.w.Write(p[:len(p)-m])
 	fmt.Printf("\x1b[32m End truncWriter.Write %#v \x1b[0m\n", p)
+	fmt.Printf("\x1b[32m End truncWriter w.p %#v \x1b[0m\n", w.p)
 	return n + nn, err
 }
 
@@ -157,6 +159,11 @@ func (w *flateWriteWrapper) Close() error {
 
 	if w.tw.p != [4]byte{0, 0, 0xff, 0xff} {
 		return errors.New("websocket: internal error, unexpected bytes at end of flate stream")
+	}
+
+	if !w.isDictWriter {
+		w.tw.p = [4]byte{}
+		w.tw.n = 0
 	}
 
 	err2 := w.tw.w.Close()

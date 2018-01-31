@@ -514,12 +514,12 @@ func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
 	c.writer = mw
 	if c.newCompressionWriter != nil && c.enableWriteCompression && isData(messageType) {
 		mw.compress = true
-		// For context-takeover, frate.Writer must be set to conn.
+		// For context-takeover
 		if c.contextTakeover {
 			if fww, ok := c.compressionWriters[messageType]; ok {
 				// tw := &truncWriter{w: c.writer}
 
-				// Todo: if write
+				//Todo reset trunkwriter inside flate.Writer.
 
 				// fw, _ := flate.NewWriterDict(tw, c.compressionLevel, []byte("Hello"))
 				// fww.fw.Reset(tw)
