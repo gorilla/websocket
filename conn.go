@@ -9,7 +9,6 @@ import (
 	"compress/flate"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -85,20 +84,14 @@ const (
 	PongMessage = 10
 )
 
-// ErrCloseSent is returned when the application writes a message to the
-// connection after sending a close message.
-var ErrCloseSent = errors.New("websocket: close sent")
-
-// ErrReadLimit is returned when reading a message that is larger than the
-// read limit set for the connection.
-var ErrReadLimit = errors.New("websocket: read limit exceeded")
-
-// netError satisfies the net Error interface.
-type netError struct {
-	msg       string
-	temporary bool
-	timeout   bool
-}
+type (
+	// netError satisfies the net Error interface.
+	netError struct {
+		msg       string
+		temporary bool
+		timeout   bool
+	}
+)
 
 func (e *netError) Error() string   { return e.msg }
 func (e *netError) Temporary() bool { return e.temporary }
@@ -182,6 +175,14 @@ var (
 	errBadWriteOpCode      = errors.New("websocket: bad write message type")
 	errWriteClosed         = errors.New("websocket: write closed")
 	errInvalidControlFrame = errors.New("websocket: invalid control frame")
+
+	// ErrCloseSent is returned when the application writes a message to the
+	// connection after sending a close message.
+	ErrCloseSent = errors.New("websocket: close sent")
+
+	// ErrReadLimit is returned when reading a message that is larger than the
+	// read limit set for the connection.
+	ErrReadLimit = errors.New("websocket: read limit exceeded")
 )
 
 func newMaskKey() [4]byte {
@@ -781,16 +782,12 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 
 	w, err := c.NextWriter(messageType)
 	if err != nil {
-		fmt.Printf("\x1b[31m c.NextWriter %v \x1b[0m\n", err)
 		return err
 	}
 	if _, err := w.Write(data); err != nil {
-		fmt.Printf("\x1b[31m w.Write %v \x1b[0m\n", err)
 		return err
 	}
 
-	fmt.Printf("WriteMessage data %v \x1b[0m\n", data)
-	fmt.Printf("\x1b[31m w.Write err %v \x1b[0m\n", err)
 	return w.Close()
 }
 
