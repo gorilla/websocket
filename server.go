@@ -193,6 +193,8 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	c.subprotocol = subprotocol
 
 	if compress {
+		c.compressionLevel = u.CompressionLevel
+
 		switch {
 		case contextTakeover && u.EnableContextTakeover:
 			c.contextTakeover = contextTakeover

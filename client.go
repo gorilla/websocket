@@ -288,6 +288,10 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 
 	conn := newConn(netConn, false, d.ReadBufferSize, d.WriteBufferSize)
 
+	if d.EnableCompression {
+		conn.compressionLevel = d.CompressionLevel
+	}
+
 	if err := req.Write(netConn); err != nil {
 		return nil, nil, err
 	}
