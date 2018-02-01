@@ -6,6 +6,7 @@ package websocket
 
 import (
 	"bufio"
+	"compress/flate"
 	"errors"
 	"net"
 	"net/http"
@@ -187,7 +188,11 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		switch {
 		case contextTakeover:
 			c.contextTakeover = contextTakeover
-			c.newCompressionWriter = compressContextTakeover
+
+			var f contextTakeoverWriterFactory
+			f.fw, _ = flate.NewWriter(&f.tw, 2) // level is specified in Dialer, Upgrader
+			c.newCompressionWriter = f.newCompressionWriter
+
 			c.newDecompressionReader = decompressContextTakeover
 		default:
 			c.newCompressionWriter = compressNoContextTakeover

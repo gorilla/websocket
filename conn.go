@@ -6,7 +6,6 @@ package websocket
 
 import (
 	"bufio"
-	"compress/flate"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -346,6 +345,7 @@ func newConnBRW(conn net.Conn, isServer bool, readBufferSize, writeBufferSize in
 
 		rxDict: &[]byte{},
 	}
+
 	c.SetCloseHandler(nil)
 	c.SetPingHandler(nil)
 	c.SetPongHandler(nil)
@@ -517,23 +517,8 @@ func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
 		mw.compress = true
 		// For context-takeover
 		if c.contextTakeover {
-			if fww, ok := c.compressionWriters[messageType]; ok {
-				// tw := &truncWriter{w: c.writer}
-
-				//Todo reset trunkwriter inside flate.Writer.
-
-				// fw, _ := flate.NewWriterDict(tw, c.compressionLevel, []byte("Hello"))
-				// fww.fw.Reset(tw)
-				// fww.fw = fw
-				fww.tw.w = c.writer
-				return fww, nil
-			} else {
-				tw := &truncWriter{w: c.writer}
-				fw, _ := flate.NewWriterDict(tw, c.compressionLevel, nil)
-				fww := &flateWriteWrapper{fw: fw, tw: tw, isDictWriter: true}
-				c.compressionWriters[messageType] = fww
-				return fww, nil
-			}
+			c.writer = c.newCompressionWriter(c.writer, c.compressionLevel)
+			return c.writer, nil
 		}
 
 		c.writer = c.newCompressionWriter(c.writer, c.compressionLevel)
