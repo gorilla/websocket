@@ -509,8 +509,9 @@ func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
 	}
 	c.writer = mw
 	if c.newCompressionWriter != nil && c.enableWriteCompression && isData(messageType) {
+		w := c.newCompressionWriter(c.writer, c.compressionLevel)
 		mw.compress = true
-		c.writer = c.newCompressionWriter(c.writer, c.compressionLevel)
+		c.writer = w
 	}
 	return c.writer, nil
 }
