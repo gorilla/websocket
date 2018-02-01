@@ -246,7 +246,6 @@ type Conn struct {
 	enableWriteCompression bool
 	compressionLevel       int
 	newCompressionWriter   func(io.WriteCloser, int) io.WriteCloser
-	compressionWriters     map[int]*flateWriteWrapper
 
 	// Read fields
 	reader        io.ReadCloser // the current reader returned to the application
@@ -329,8 +328,6 @@ func newConnBRW(conn net.Conn, isServer bool, readBufferSize, writeBufferSize in
 		writeBuf = make([]byte, writeBufferSize+maxFrameHeaderSize)
 	}
 
-	cw := make(map[int]*flateWriteWrapper, 2)
-
 	c := &Conn{
 		isServer:               isServer,
 		br:                     br,
@@ -340,8 +337,6 @@ func newConnBRW(conn net.Conn, isServer bool, readBufferSize, writeBufferSize in
 		writeBuf:               writeBuf,
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
-
-		compressionWriters: cw,
 
 		rxDict: &[]byte{},
 	}
@@ -515,12 +510,6 @@ func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
 	c.writer = mw
 	if c.newCompressionWriter != nil && c.enableWriteCompression && isData(messageType) {
 		mw.compress = true
-		// For context-takeover
-		if c.contextTakeover {
-			c.writer = c.newCompressionWriter(c.writer, c.compressionLevel)
-			return c.writer, nil
-		}
-
 		c.writer = c.newCompressionWriter(c.writer, c.compressionLevel)
 	}
 	return c.writer, nil

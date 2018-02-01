@@ -54,6 +54,14 @@ type Upgrader struct {
 	// guarantee that compression will be supported. Currently only "no context
 	// takeover" modes are supported.
 	EnableCompression bool
+
+	// CompressionLeval is set for contextTakeoer.
+	CompressionLevel int
+
+	// EnableContextTakeover specifies specifies if the client should attempt to negotiate
+	// per message compression with context-takeover (RFC 7692).
+	// but window bits is allowed only 15, because go's flate library support 15 bits only.
+	EnableContextTakeover bool
 }
 
 func (u *Upgrader) returnError(w http.ResponseWriter, r *http.Request, status int, reason string) (*Conn, error) {
@@ -186,11 +194,11 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 
 	if compress {
 		switch {
-		case contextTakeover:
+		case contextTakeover && u.EnableContextTakeover:
 			c.contextTakeover = contextTakeover
 
 			var f contextTakeoverWriterFactory
-			f.fw, _ = flate.NewWriter(&f.tw, 2) // level is specified in Dialer, Upgrader
+			f.fw, _ = flate.NewWriter(&f.tw, u.CompressionLevel) // level is specified in Dialer, Upgrader
 			c.newCompressionWriter = f.newCompressionWriter
 
 			c.newDecompressionReader = decompressContextTakeover
@@ -211,7 +219,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	}
 	if compress {
 		switch {
-		case contextTakeover:
+		case contextTakeover && u.EnableContextTakeover:
 			p = append(p, "Sec-Websocket-Extensions: permessage-deflate; server_max_window_bits=15; client_max_window_bits=15\r\n"...)
 		default:
 			p = append(p, "Sec-Websocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover\r\n"...)
