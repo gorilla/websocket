@@ -267,7 +267,6 @@ type Conn struct {
 	newDecompressionReader func(io.Reader) io.ReadCloser // arges may flateReadWrapper struct
 
 	contextTakeover bool
-	rxDict          *[]byte
 }
 
 func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) *Conn {
@@ -337,8 +336,6 @@ func newConnBRW(conn net.Conn, isServer bool, readBufferSize, writeBufferSize in
 		writeBuf:               writeBuf,
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
-
-		rxDict: &[]byte{},
 	}
 
 	c.SetCloseHandler(nil)

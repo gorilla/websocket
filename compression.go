@@ -129,7 +129,7 @@ func (w *flateWriteWrapper) Close() error {
 }
 
 type flateReadWrapper struct {
-	fr io.ReadCloser // flate.NewReader
+	fr io.ReadCloser
 }
 
 func (r *flateReadWrapper) Read(p []byte) (int, error) {
