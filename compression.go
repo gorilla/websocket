@@ -17,39 +17,25 @@ const (
 	minCompressionLevel     = -2 // flate.HuffmanOnly not defined in Go < 1.6
 	maxCompressionLevel     = flate.BestCompression
 	defaultCompressionLevel = 1
+
+	tail =
+	// Add four bytes as specified in RFC
+	"\x00\x00\xff\xff" +
+		// Add final block to squelch unexpected EOF error from flate reader.
+		"\x01\x00\x00\xff\xff"
 )
 
 var (
-	flateWriterPools     [maxCompressionLevel - minCompressionLevel + 1]sync.Pool
-	flateWriterDictPools [maxCompressionLevel - minCompressionLevel + 1]sync.Pool
-	flateReaderPool      = sync.Pool{New: func() interface{} {
+	flateWriterPools [maxCompressionLevel - minCompressionLevel + 1]sync.Pool
+	flateReaderPool  = sync.Pool{New: func() interface{} {
 		return flate.NewReader(nil)
 	}}
 )
 
-func decompressNoContextTakeover(r io.Reader, dict *[]byte) io.ReadCloser {
-	const tail =
-	// Add four bytes as specified in RFC
-	"\x00\x00\xff\xff" +
-		// Add final block to squelch unexpected EOF error from flate reader.
-		"\x01\x00\x00\xff\xff"
-
+func decompressNoContextTakeover(r io.Reader) io.ReadCloser {
 	fr, _ := flateReaderPool.Get().(io.ReadCloser)
 	fr.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), nil)
 	return &flateReadWrapper{fr: fr}
-}
-
-func decompressContextTakeover(r io.Reader, dict *[]byte) io.ReadCloser {
-	const tail =
-	// Add four bytes as specified in RFC
-	"\x00\x00\xff\xff" +
-		// Add final block to squelch unexpected EOF error from flate reader.
-		"\x01\x00\x00\xff\xff"
-
-	fr, _ := flateReaderPool.Get().(io.ReadCloser)
-	fr.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), *dict)
-
-	return &flateReadWrapper{fr: fr, hasDict: true, dict: dict}
 }
 
 func isValidCompressionLevel(level int) bool {
@@ -108,8 +94,6 @@ type flateWriteWrapper struct {
 	fw *flate.Writer
 	tw *truncWriter
 	p  *sync.Pool
-
-	isDictWriter bool
 }
 
 func (w *flateWriteWrapper) Write(p []byte) (int, error) {
@@ -126,19 +110,15 @@ func (w *flateWriteWrapper) Close() error {
 	}
 	err1 := w.fw.Flush()
 
-	if !w.isDictWriter {
-		w.p.Put(w.fw)
-		w.fw = nil
-	}
+	w.p.Put(w.fw)
+	w.fw = nil
 
 	if w.tw.p != [4]byte{0, 0, 0xff, 0xff} {
 		return errors.New("websocket: internal error, unexpected bytes at end of flate stream")
 	}
 
-	if !w.isDictWriter {
-		w.tw.p = [4]byte{}
-		w.tw.n = 0
-	}
+	w.tw.p = [4]byte{}
+	w.tw.n = 0
 
 	err2 := w.tw.w.Close()
 	if err1 != nil {
@@ -150,9 +130,6 @@ func (w *flateWriteWrapper) Close() error {
 
 type flateReadWrapper struct {
 	fr io.ReadCloser // flate.NewReader
-
-	hasDict bool
-	dict    *[]byte
 }
 
 func (r *flateReadWrapper) Read(p []byte) (int, error) {
@@ -169,12 +146,6 @@ func (r *flateReadWrapper) Read(p []byte) (int, error) {
 		r.Close()
 	}
 
-	if r.hasDict {
-		if n > 0 {
-			r.addDict(p[:n])
-		}
-	}
-
 	return n, err
 }
 
@@ -184,22 +155,10 @@ func (r *flateReadWrapper) Close() error {
 	}
 	err := r.fr.Close()
 
-	if !r.hasDict {
-		flateReaderPool.Put(r.fr)
-	}
+	flateReaderPool.Put(r.fr)
 
 	r.fr = nil
 	return err
-}
-
-// addDict adds payload to dict.
-func (r *flateReadWrapper) addDict(b []byte) {
-	*r.dict = append(*r.dict, b...)
-
-	if len(*r.dict) > maxWindowBits {
-		offset := len(*r.dict) - maxWindowBits
-		*r.dict = (*r.dict)[offset:]
-	}
 }
 
 type (
@@ -241,4 +200,52 @@ func (w *flateTakeoverWriteWrapper) Close() error {
 		return err1
 	}
 	return err2
+}
+
+type (
+	contextTakeoverReaderFactory struct {
+		fr     io.ReadCloser
+		window []byte
+	}
+
+	flateTakeoverReadWrapper struct {
+		f *contextTakeoverReaderFactory
+	}
+)
+
+func (f *contextTakeoverReaderFactory) newDeCompressionReader(r io.Reader) io.ReadCloser {
+	f.fr.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), f.window)
+	return &flateTakeoverReadWrapper{f}
+}
+
+func (r *flateTakeoverReadWrapper) Read(p []byte) (int, error) {
+	if r.f.fr == nil {
+		return 0, io.ErrClosedPipe
+	}
+
+	n, err := r.f.fr.Read(p)
+
+	// add dictionary
+	r.f.window = append(r.f.window, p[:n]...)
+	if len(r.f.window) > maxWindowBits {
+		offset := len(r.f.window) - maxWindowBits
+		r.f.window = r.f.window[offset:]
+	}
+
+	if err == io.EOF {
+		// Preemptively place the reader back in the pool. This helps with
+		// scenarios where the application does not call NextReader() soon after
+		// this final read.
+		r.Close()
+	}
+
+	return n, err
+}
+
+func (r *flateTakeoverReadWrapper) Close() error {
+	if r.f.fr == nil {
+		return io.ErrClosedPipe
+	}
+	err := r.f.fr.Close()
+	return err
 }

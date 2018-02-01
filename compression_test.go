@@ -91,7 +91,7 @@ func BenchmarkReadWithCompression(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r := bytes.NewReader(messages[i%len(messages)])
-		reader := c.newDecompressionReader(r, nil)
+		reader := c.newDecompressionReader(r)
 		ioutil.ReadAll(reader)
 	}
 	b.ReportAllocs()
@@ -102,12 +102,15 @@ func BenchmarkReadWithCompressionOfContextTakeover(b *testing.B) {
 	c := newConn(fakeNetConn{Reader: nil, Writer: w}, false, 1024, 1024)
 	c.enableWriteCompression = true
 	c.contextTakeover = true
-	c.newDecompressionReader = decompressContextTakeover
+	var frf contextTakeoverReaderFactory
+	fr := flate.NewReader(nil)
+	frf.fr = fr
+	c.newDecompressionReader = frf.newDeCompressionReader
 	messages := textMessages(100)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r := bytes.NewReader(messages[i%len(messages)])
-		reader := c.newDecompressionReader(r, c.rxDict)
+		reader := c.newDecompressionReader(r)
 		ioutil.ReadAll(reader)
 	}
 	b.ReportAllocs()

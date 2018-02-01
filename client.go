@@ -333,10 +333,13 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 			conn.contextTakeover = true
 
 			var f contextTakeoverWriterFactory
-			f.fw, _ = flate.NewWriter(&f.tw, d.CompressionLevel) // level is specified in Dialer, Upgrader
+			f.fw, _ = flate.NewWriter(&f.tw, d.CompressionLevel)
 			conn.newCompressionWriter = f.newCompressionWriter
 
-			conn.newDecompressionReader = decompressContextTakeover
+			var frf contextTakeoverReaderFactory
+			fr := flate.NewReader(nil)
+			frf.fr = fr
+			conn.newDecompressionReader = frf.newDeCompressionReader
 		default:
 			conn.newCompressionWriter = compressNoContextTakeover
 			conn.newDecompressionReader = decompressNoContextTakeover

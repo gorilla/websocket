@@ -199,11 +199,14 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		case contextTakeover && u.EnableContextTakeover:
 			c.contextTakeover = contextTakeover
 
-			var f contextTakeoverWriterFactory
-			f.fw, _ = flate.NewWriter(&f.tw, u.CompressionLevel) // level is specified in Dialer, Upgrader
-			c.newCompressionWriter = f.newCompressionWriter
+			var fwf contextTakeoverWriterFactory
+			fwf.fw, _ = flate.NewWriter(&fwf.tw, u.CompressionLevel)
+			c.newCompressionWriter = fwf.newCompressionWriter
 
-			c.newDecompressionReader = decompressContextTakeover
+			var frf contextTakeoverReaderFactory
+			fr := flate.NewReader(nil)
+			frf.fr = fr
+			c.newDecompressionReader = frf.newDeCompressionReader
 		default:
 			c.newCompressionWriter = compressNoContextTakeover
 			c.newDecompressionReader = decompressNoContextTakeover

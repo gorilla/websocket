@@ -263,8 +263,8 @@ type Conn struct {
 	readErrCount  int
 	messageReader *messageReader // the current low-level reader
 
-	readDecompress         bool                                   // whether last read frame had RSV1 set
-	newDecompressionReader func(io.Reader, *[]byte) io.ReadCloser // arges may flateReadWrapper struct
+	readDecompress         bool                          // whether last read frame had RSV1 set
+	newDecompressionReader func(io.Reader) io.ReadCloser // arges may flateReadWrapper struct
 
 	contextTakeover bool
 	rxDict          *[]byte
@@ -955,13 +955,14 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 		if frameType == TextMessage || frameType == BinaryMessage {
 			c.messageReader = &messageReader{c}
 			c.reader = c.messageReader
+			c.reader = c.newDecompressionReader(c.reader)
 
-			switch {
-			case c.readDecompress && c.contextTakeover:
-				c.reader = c.newDecompressionReader(c.reader, c.rxDict)
-			case c.readDecompress:
-				c.reader = c.newDecompressionReader(c.reader, nil)
-			}
+			// switch {
+			// case c.readDecompress && c.contextTakeover:
+			// 	c.reader = c.newDecompressionReader(c.reader, c.rxDict)
+			// case c.readDecompress:
+			// 	c.reader = c.newDecompressionReader(c.reader, nil)
+			// }
 
 			return frameType, c.reader, nil
 		}
