@@ -42,6 +42,7 @@ func NewClient(netConn net.Conn, u *url.URL, requestHeader http.Header, readBufS
 		NetDial: func(net, addr string) (net.Conn, error) {
 			return netConn, nil
 		},
+		CompressionLevel: defaultCompressionLevel,
 	}
 	return d.Dial(u.String(), requestHeader)
 }
@@ -79,15 +80,18 @@ type Dialer struct {
 	// takeover" modes are supported.
 	EnableCompression bool
 
-	// EnableContextTakeover specifies specifies if the client should attempt to negotiate
-	// per message compression with context-takeover (RFC 7692).
-	// but window bits is allowed only 15, because go's flate library support 15 bits only.
-	EnableContextTakeover bool
-
 	// Jar specifies the cookie jar.
 	// If Jar is nil, cookies are not sent in requests and ignored
 	// in responses.
 	Jar http.CookieJar
+
+	// CompressionLeval is set for contextTakeoer.
+	CompressionLevel int
+
+	// EnableContextTakeover specifies specifies if the client should attempt to negotiate
+	// per message compression with context-takeover (RFC 7692).
+	// but window bits is allowed only 15, because go's flate library support 15 bits only.
+	EnableContextTakeover bool
 }
 
 var errMalformedURL = errors.New("malformed ws or wss URL")
@@ -325,7 +329,7 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 			conn.contextTakeover = true
 
 			var f contextTakeoverWriterFactory
-			f.fw, _ = flate.NewWriter(&f.tw, 2) // level is specified in Dialer, Upgrader
+			f.fw, _ = flate.NewWriter(&f.tw, d.CompressionLevel) // level is specified in Dialer, Upgrader
 			conn.newCompressionWriter = f.newCompressionWriter
 
 			conn.newDecompressionReader = decompressContextTakeover
