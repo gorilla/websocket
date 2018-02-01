@@ -6,6 +6,7 @@ package websocket
 
 import (
 	"bytes"
+	"compress/flate"
 	"crypto/tls"
 	"errors"
 	"io"
@@ -322,7 +323,11 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		switch {
 		case cmwb && smwb:
 			conn.contextTakeover = true
-			conn.newCompressionWriter = compressContextTakeover
+
+			var f contextTakeoverWriterFactory
+			f.fw, _ = flate.NewWriter(&f.tw, 2) // level is specified in Dialer, Upgrader
+			conn.newCompressionWriter = f.newCompressionWriter
+
 			conn.newDecompressionReader = decompressContextTakeover
 		default:
 			conn.newCompressionWriter = compressNoContextTakeover

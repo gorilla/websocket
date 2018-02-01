@@ -68,18 +68,6 @@ func compressNoContextTakeover(w io.WriteCloser, level int) io.WriteCloser {
 	return &flateWriteWrapper{fw: fw, tw: tw, p: p}
 }
 
-func compressContextTakeover(w io.WriteCloser, level int) io.WriteCloser {
-	p := &flateWriterDictPools[level-minCompressionLevel]
-	tw := &truncWriter{w: w}
-	fw, _ := p.Get().(*flate.Writer)
-	if fw == nil {
-		fw, _ = flate.NewWriterDict(tw, level, []byte{})
-	} else {
-		fw.Reset(tw)
-	}
-	return &flateWriteWrapper{fw: fw, tw: tw, p: p}
-}
-
 // truncWriter is an io.Writer that writes all but the last four bytes of the
 // stream to another io.Writer.
 type truncWriter struct {
@@ -120,6 +108,8 @@ type flateWriteWrapper struct {
 	fw *flate.Writer
 	tw *truncWriter
 	p  *sync.Pool
+
+	isDictWriter bool
 }
 
 func (w *flateWriteWrapper) Write(p []byte) (int, error) {
@@ -136,16 +126,25 @@ func (w *flateWriteWrapper) Close() error {
 	}
 	err1 := w.fw.Flush()
 
-	w.p.Put(w.fw)
+	if !w.isDictWriter {
+		w.p.Put(w.fw)
+		w.fw = nil
+	}
 
-	w.fw = nil
 	if w.tw.p != [4]byte{0, 0, 0xff, 0xff} {
 		return errors.New("websocket: internal error, unexpected bytes at end of flate stream")
 	}
+
+	if !w.isDictWriter {
+		w.tw.p = [4]byte{}
+		w.tw.n = 0
+	}
+
 	err2 := w.tw.w.Close()
 	if err1 != nil {
 		return err1
 	}
+
 	return err2
 }
 
@@ -201,4 +200,45 @@ func (r *flateReadWrapper) addDict(b []byte) {
 		offset := len(*r.dict) - maxWindowBits
 		*r.dict = (*r.dict)[offset:]
 	}
+}
+
+type (
+	contextTakeoverWriterFactory struct {
+		fw *flate.Writer
+		tw truncWriter
+	}
+
+	flateTakeoverWriteWrapper struct {
+		f *contextTakeoverWriterFactory
+	}
+)
+
+func (f *contextTakeoverWriterFactory) newCompressionWriter(w io.WriteCloser, level int) io.WriteCloser {
+	f.tw.w = w
+	f.tw.n = 0
+	return &flateTakeoverWriteWrapper{f}
+}
+
+func (w *flateTakeoverWriteWrapper) Write(p []byte) (int, error) {
+	if w.f == nil {
+		return 0, errWriteClosed
+	}
+	return w.f.fw.Write(p)
+}
+
+func (w *flateTakeoverWriteWrapper) Close() error {
+	if w.f == nil {
+		return errWriteClosed
+	}
+	f := w.f
+	w.f = nil
+	err1 := f.fw.Flush()
+	if f.tw.p != [4]byte{0, 0, 0xff, 0xff} {
+		return errors.New("websocket: internal error, unexpected bytes at end of flate stream")
+	}
+	err2 := f.tw.w.Close()
+	if err1 != nil {
+		return err1
+	}
+	return err2
 }
