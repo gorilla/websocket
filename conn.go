@@ -955,14 +955,9 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 		if frameType == TextMessage || frameType == BinaryMessage {
 			c.messageReader = &messageReader{c}
 			c.reader = c.messageReader
-			c.reader = c.newDecompressionReader(c.reader)
-
-			// switch {
-			// case c.readDecompress && c.contextTakeover:
-			// 	c.reader = c.newDecompressionReader(c.reader, c.rxDict)
-			// case c.readDecompress:
-			// 	c.reader = c.newDecompressionReader(c.reader, nil)
-			// }
+			if c.readDecompress {
+				c.reader = c.newDecompressionReader(c.reader)
+			}
 
 			return frameType, c.reader, nil
 		}

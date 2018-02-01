@@ -575,7 +575,7 @@ func TestDialCompressionOfContextTakeover(t *testing.T) {
 	defer ws.Close()
 
 	// Todo multiple send and receive.
-	multipleSendRecv(t, ws)
+	sendRecv(t, ws)
 }
 
 func TestSocksProxyDial(t *testing.T) {
