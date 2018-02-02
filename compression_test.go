@@ -82,40 +82,6 @@ func BenchmarkWriteWithCompressionOfContextTakeover(b *testing.B) {
 	b.ReportAllocs()
 }
 
-func BenchmarkReadWithCompression(b *testing.B) {
-	w := ioutil.Discard
-	c := newConn(fakeNetConn{Reader: nil, Writer: w}, false, 1024, 1024)
-	c.enableWriteCompression = true
-	c.newDecompressionReader = decompressNoContextTakeover
-	messages := textMessages(100)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		r := bytes.NewReader(messages[i%len(messages)])
-		reader := c.newDecompressionReader(r)
-		ioutil.ReadAll(reader)
-	}
-	b.ReportAllocs()
-}
-
-func BenchmarkReadWithCompressionOfContextTakeover(b *testing.B) {
-	w := ioutil.Discard
-	c := newConn(fakeNetConn{Reader: nil, Writer: w}, false, 1024, 1024)
-	c.enableWriteCompression = true
-	c.contextTakeover = true
-	var frf contextTakeoverReaderFactory
-	fr := flate.NewReader(nil)
-	frf.fr = fr
-	c.newDecompressionReader = frf.newDeCompressionReader
-	messages := textMessages(100)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		r := bytes.NewReader(messages[i%len(messages)])
-		reader := c.newDecompressionReader(r)
-		ioutil.ReadAll(reader)
-	}
-	b.ReportAllocs()
-}
-
 func TestValidCompressionLevel(t *testing.T) {
 	c := newConn(fakeNetConn{}, false, 1024, 1024)
 	for _, level := range []int{minCompressionLevel - 1, maxCompressionLevel + 1} {
