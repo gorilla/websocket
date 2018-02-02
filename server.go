@@ -193,20 +193,24 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	c.subprotocol = subprotocol
 
 	if compress {
+		if !isValidCompressionLevel(u.CompressionLevel) {
+			return nil, errors.New("websocket: invalid compression level")
+		}
+
 		c.compressionLevel = u.CompressionLevel
 
 		switch {
 		case contextTakeover && u.EnableContextTakeover:
 			c.contextTakeover = contextTakeover
 
-			var fwf contextTakeoverWriterFactory
-			fwf.fw, _ = flate.NewWriter(&fwf.tw, u.CompressionLevel)
-			c.newCompressionWriter = fwf.newCompressionWriter
+			var wf contextTakeoverWriterFactory
+			wf.fw, _ = flate.NewWriter(&wf.tw, u.CompressionLevel)
+			c.newCompressionWriter = wf.newCompressionWriter
 
-			var frf contextTakeoverReaderFactory
+			var rf contextTakeoverReaderFactory
 			fr := flate.NewReader(nil)
-			frf.fr = fr
-			c.newDecompressionReader = frf.newDeCompressionReader
+			rf.fr = fr
+			c.newDecompressionReader = rf.newDeCompressionReader
 		default:
 			c.newCompressionWriter = compressNoContextTakeover
 			c.newDecompressionReader = decompressNoContextTakeover

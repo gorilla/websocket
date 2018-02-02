@@ -42,7 +42,6 @@ func NewClient(netConn net.Conn, u *url.URL, requestHeader http.Header, readBufS
 		NetDial: func(net, addr string) (net.Conn, error) {
 			return netConn, nil
 		},
-		CompressionLevel: defaultCompressionLevel,
 	}
 	return d.Dial(u.String(), requestHeader)
 }
@@ -289,6 +288,9 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 	conn := newConn(netConn, false, d.ReadBufferSize, d.WriteBufferSize)
 
 	if d.EnableCompression {
+		if !isValidCompressionLevel(d.CompressionLevel) {
+			return nil, nil, errors.New("websocket: invalid compression level")
+		}
 		conn.compressionLevel = d.CompressionLevel
 	}
 
@@ -332,14 +334,14 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		case cmwb && smwb:
 			conn.contextTakeover = true
 
-			var f contextTakeoverWriterFactory
-			f.fw, _ = flate.NewWriter(&f.tw, d.CompressionLevel)
-			conn.newCompressionWriter = f.newCompressionWriter
+			var wf contextTakeoverWriterFactory
+			wf.fw, _ = flate.NewWriter(&wf.tw, d.CompressionLevel)
+			conn.newCompressionWriter = wf.newCompressionWriter
 
-			var frf contextTakeoverReaderFactory
+			var rf contextTakeoverReaderFactory
 			fr := flate.NewReader(nil)
-			frf.fr = fr
-			conn.newDecompressionReader = frf.newDeCompressionReader
+			rf.fr = fr
+			conn.newDecompressionReader = rf.newDeCompressionReader
 		default:
 			conn.newCompressionWriter = compressNoContextTakeover
 			conn.newDecompressionReader = decompressNoContextTakeover

@@ -225,7 +225,7 @@ func (r *flateTakeoverReadWrapper) Read(p []byte) (int, error) {
 
 	n, err := r.f.fr.Read(p)
 
-	// add dictionary
+	// add window
 	r.f.window = append(r.f.window, p[:n]...)
 	if len(r.f.window) > maxWindowBits {
 		offset := len(r.f.window) - maxWindowBits
