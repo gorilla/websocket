@@ -75,8 +75,7 @@ type Dialer struct {
 
 	// EnableCompression specifies if the client should attempt to negotiate
 	// per message compression (RFC 7692). Setting this value to true does not
-	// guarantee that compression will be supported. Currently only "no context
-	// takeover" modes are supported.
+	// guarantee that compression will be supported.
 	EnableCompression bool
 
 	// Jar specifies the cookie jar.
@@ -84,7 +83,7 @@ type Dialer struct {
 	// in responses.
 	Jar http.CookieJar
 
-	// CompressionLeval is set for contextTakeoer.
+	// CompressionLevel is passed to conn when the compression setting is true.
 	CompressionLevel int
 
 	// EnableContextTakeover specifies specifies if the client should attempt to negotiate
