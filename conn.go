@@ -87,7 +87,7 @@ const (
 // connection after sending a close message.
 var ErrCloseSent = errors.New("websocket: close sent")
 
-// ErrReadLi	mit is returned when reading a message that is larger than the
+// ErrReadLimit is returned when reading a message that is larger than the
 // read limit set for the connection.
 var ErrReadLimit = errors.New("websocket: read limit exceeded")
 
