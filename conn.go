@@ -382,15 +382,9 @@ func (c *Conn) write(frameType int, deadline time.Time, bufs ...[]byte) error {
 	}
 
 	c.conn.SetWriteDeadline(deadline)
-	for _, buf := range bufs {
-		if len(buf) > 0 {
-			_, err := c.conn.Write(buf)
-			if err != nil {
-				return c.writeFatal(err)
-			}
-		}
+	if err = c.writeBufs(bufs); err != nil {
+		return c.writeFatal(err)
 	}
-
 	if frameType == CloseMessage {
 		c.writeFatal(ErrCloseSent)
 	}
