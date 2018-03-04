@@ -41,6 +41,7 @@ func NewClient(netConn net.Conn, u *url.URL, requestHeader http.Header, readBufS
 		NetDial: func(net, addr string) (net.Conn, error) {
 			return netConn, nil
 		},
+		HandshakeTimeout: 5 * time.Second,
 	}
 	return d.Dial(u.String(), requestHeader)
 }
@@ -106,7 +107,8 @@ func hostPortNoPort(u *url.URL) (hostPort, hostNoPort string) {
 
 // DefaultDialer is a dialer with all fields set to the default values.
 var DefaultDialer = &Dialer{
-	Proxy: http.ProxyFromEnvironment,
+	Proxy:            http.ProxyFromEnvironment,
+	HandshakeTimeout: 5 * time.Second,
 }
 
 // Dial creates a new client connection. Use requestHeader to specify the
@@ -122,7 +124,8 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 
 	if d == nil {
 		d = &Dialer{
-			Proxy: http.ProxyFromEnvironment,
+			Proxy:            http.ProxyFromEnvironment,
+			HandshakeTimeout: 5 * time.Second,
 		}
 	}
 
