@@ -180,12 +180,8 @@
 //
 // var upgrader = websocket.Upgrader{
 //      EnableCompression:     true,
-//      EnableContextTakeover: true,
-//      CompressionLevel:      2, // default 0
+//      AllowServerContextTakeover: true,
 // }
-//
-//
-// Since compression level is passed to Conn, please do not set it later.
 //
 // Use of compression is experimental and may result in decreased performance.
 package websocket
