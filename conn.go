@@ -263,8 +263,6 @@ type Conn struct {
 
 	readDecompress         bool                          // whether last read frame had RSV1 set
 	newDecompressionReader func(io.Reader) io.ReadCloser // arges may flateReadWrapper struct
-
-	contextTakeover bool
 }
 
 func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) *Conn {
@@ -1145,8 +1143,6 @@ func (c *Conn) EnableWriteCompression(enable bool) {
 // binary messages. This function is a noop if compression was not negotiated
 // with the peer. See the compress/flate package for a description of
 // compression levels.
-// If you use context-takeover, do not specify a compression level from this method.
-// Please set it to Dialer or Upgrader in advance.
 func (c *Conn) SetCompressionLevel(level int) error {
 	if !isValidCompressionLevel(level) {
 		return errors.New("websocket: invalid compression level")

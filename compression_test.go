@@ -2,7 +2,6 @@ package websocket
 
 import (
 	"bytes"
-	"compress/flate"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -71,9 +70,7 @@ func BenchmarkWriteWithCompressionOfContextTakeover(b *testing.B) {
 	c := newConn(fakeNetConn{Reader: nil, Writer: w}, false, 1024, 1024)
 	messages := textMessages(100)
 	c.enableWriteCompression = true
-	c.contextTakeover = true
 	var f contextTakeoverWriterFactory
-	f.fw, _ = flate.NewWriter(&f.tw, 2) // level is specified in Dialer, Upgrader
 	c.newCompressionWriter = f.newCompressionWriter
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

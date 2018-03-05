@@ -109,14 +109,12 @@ func TestFraming(t *testing.T) {
 					var wf contextTakeoverWriterFactory
 					wf.fw, _ = flate.NewWriter(&wf.tw, defaultCompressionLevel)
 					wc.newCompressionWriter = wf.newCompressionWriter
-					wc.contextTakeover = true
 
 					var rf contextTakeoverReaderFactory
 					fr := flate.NewReader(nil)
 					rf.fr = fr
 					rc.newDecompressionReader = rf.newDeCompressionReader
 
-					rc.contextTakeover = true
 				case compressCondition.compress:
 					wc.newCompressionWriter = compressNoContextTakeover
 					rc.newDecompressionReader = decompressNoContextTakeover

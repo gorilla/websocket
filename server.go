@@ -54,17 +54,13 @@ type Upgrader struct {
 	CheckOrigin func(r *http.Request) bool
 
 	// EnableCompression specify if the server should attempt to negotiate per
-	// message compression (RFC 7692). Setting this value to true does not
-	// guarantee that compression will be supported.
+	// message compression (RFC 7692).
 	EnableCompression bool
 
-	// CompressionLevel is passed to conn when the compression setting is true.
-	CompressionLevel int
-
-	// EnableContextTakeover specifies specifies if the client should attempt to negotiate
-	// per message compression with context-takeover (RFC 7692).
-	// but window bits is allowed only 15, because go's flate library support 15 bits only.
-	EnableContextTakeover bool
+	// AllowServerContextTakeover specifies whether the server will negotiate server context
+	// takeover for per message compression.  Context takeover improves compression at the
+	// cost of using more memory.
+	AllowServerContextTakeover bool
 }
 
 func (u *Upgrader) returnError(w http.ResponseWriter, r *http.Request, status int, reason string) (*Conn, error) {
@@ -196,18 +192,9 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	c.subprotocol = subprotocol
 
 	if compress {
-		if !isValidCompressionLevel(u.CompressionLevel) {
-			return nil, errors.New("websocket: invalid compression level")
-		}
-
-		c.compressionLevel = u.CompressionLevel
-
 		switch {
-		case contextTakeover && u.EnableContextTakeover:
-			c.contextTakeover = contextTakeover
-
+		case contextTakeover && u.AllowServerContextTakeover:
 			var wf contextTakeoverWriterFactory
-			wf.fw, _ = flate.NewWriter(&wf.tw, u.CompressionLevel)
 			c.newCompressionWriter = wf.newCompressionWriter
 
 			var rf contextTakeoverReaderFactory
@@ -231,7 +218,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	}
 	if compress {
 		switch {
-		case contextTakeover && u.EnableContextTakeover:
+		case contextTakeover && u.AllowServerContextTakeover:
 			p = append(p, "Sec-Websocket-Extensions: permessage-deflate; server_max_window_bits=15; client_max_window_bits=15\r\n"...)
 		default:
 			p = append(p, "Sec-Websocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover\r\n"...)

@@ -172,10 +172,17 @@ type (
 	}
 )
 
-func (f *contextTakeoverWriterFactory) newCompressionWriter(w io.WriteCloser, level int) io.WriteCloser {
-	f.tw.w = w
-	f.tw.n = 0
-	return &flateTakeoverWriteWrapper{f}
+func (wf *contextTakeoverWriterFactory) newCompressionWriter(w io.WriteCloser, level int) io.WriteCloser {
+	// Set writer on first write.
+	// In order to guarantee the consistency of compression with the client,
+	// do not reassign later.
+	if wf.fw == nil {
+		wf.fw, _ = flate.NewWriter(&wf.tw, level)
+	}
+
+	wf.tw.w = w
+	wf.tw.n = 0
+	return &flateTakeoverWriteWrapper{wf}
 }
 
 func (w *flateTakeoverWriteWrapper) Write(p []byte) (int, error) {
