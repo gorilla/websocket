@@ -41,7 +41,6 @@ func NewClient(netConn net.Conn, u *url.URL, requestHeader http.Header, readBufS
 		NetDial: func(net, addr string) (net.Conn, error) {
 			return netConn, nil
 		},
-		HandshakeTimeout: 45 * time.Second,
 	}
 	return d.Dial(u.String(), requestHeader)
 }
@@ -111,6 +110,9 @@ var DefaultDialer = &Dialer{
 	HandshakeTimeout: 45 * time.Second,
 }
 
+// nilDialer is dialer to use when receiver is nil.
+var nilDialer Dialer = *DefaultDialer
+
 // Dial creates a new client connection. Use requestHeader to specify the
 // origin (Origin), subprotocols (Sec-WebSocket-Protocol) and cookies (Cookie).
 // Use the response.Header to get the selected subprotocol
@@ -123,10 +125,7 @@ var DefaultDialer = &Dialer{
 func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Response, error) {
 
 	if d == nil {
-		d = &Dialer{
-			Proxy:            http.ProxyFromEnvironment,
-			HandshakeTimeout: 45 * time.Second,
-		}
+		d = &nilDialer
 	}
 
 	challengeKey, err := generateChallengeKey()
