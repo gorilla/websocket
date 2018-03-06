@@ -6,7 +6,7 @@
 
 package websocket
 
-func (c *Conn) writeBufs(bufs [][]byte) error {
+func (c *Conn) writeBufs(bufs ...[]byte) error {
 	for _, buf := range bufs {
 		if len(buf) > 0 {
 			if _, err := c.conn.Write(buf); err != nil {
