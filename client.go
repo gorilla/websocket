@@ -191,6 +191,8 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 			k == "Sec-Websocket-Extensions" ||
 			(k == "Sec-Websocket-Protocol" && len(d.Subprotocols) > 0):
 			return nil, nil, errors.New("websocket: duplicate header not allowed: " + k)
+		case k == "Sec-Websocket-Protocol":
+			req.Header["Sec-WebSocket-Protocol"] = vs
 		default:
 			req.Header[k] = vs
 		}
