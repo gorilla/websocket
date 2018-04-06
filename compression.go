@@ -209,6 +209,7 @@ func (w *flateTakeoverWriteWrapper) Close() error {
 	return err2
 }
 
+// modules for compression context takeover
 type (
 	contextTakeoverReaderFactory struct {
 		fr     io.ReadCloser
