@@ -14,14 +14,13 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/smith-30/websocket"
+	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
-	ReadBufferSize:             4096,
-	WriteBufferSize:            4096,
-	EnableCompression:          true,
-	AllowServerContextTakeover: true,
+	ReadBufferSize:    4096,
+	WriteBufferSize:   4096,
+	EnableCompression: true,
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
