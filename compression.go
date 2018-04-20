@@ -35,7 +35,7 @@ var (
 func decompressNoContextTakeover(r io.Reader) io.ReadCloser {
 	fr, _ := flateReaderPool.Get().(io.ReadCloser)
 	fr.(flate.Resetter).Reset(io.MultiReader(r, strings.NewReader(tail)), nil)
-	return &flateReadWrapper{fr: fr}
+	return &flateReadWrapper{fr}
 }
 
 func isValidCompressionLevel(level int) bool {
@@ -100,7 +100,6 @@ func (w *flateWriteWrapper) Write(p []byte) (int, error) {
 	if w.fw == nil {
 		return 0, errWriteClosed
 	}
-
 	return w.fw.Write(p)
 }
 
@@ -109,22 +108,17 @@ func (w *flateWriteWrapper) Close() error {
 		return errWriteClosed
 	}
 	err1 := w.fw.Flush()
-
 	w.p.Put(w.fw)
 	w.fw = nil
-
 	if w.tw.p != [4]byte{0, 0, 0xff, 0xff} {
 		return errors.New("websocket: internal error, unexpected bytes at end of flate stream")
 	}
-
 	w.tw.p = [4]byte{}
 	w.tw.n = 0
-
 	err2 := w.tw.w.Close()
 	if err1 != nil {
 		return err1
 	}
-
 	return err2
 }
 
@@ -136,16 +130,13 @@ func (r *flateReadWrapper) Read(p []byte) (int, error) {
 	if r.fr == nil {
 		return 0, io.ErrClosedPipe
 	}
-
 	n, err := r.fr.Read(p)
-
 	if err == io.EOF {
 		// Preemptively place the reader back in the pool. This helps with
 		// scenarios where the application does not call NextReader() soon after
 		// this final read.
 		r.Close()
 	}
-
 	return n, err
 }
 
@@ -154,9 +145,7 @@ func (r *flateReadWrapper) Close() error {
 		return io.ErrClosedPipe
 	}
 	err := r.fr.Close()
-
 	flateReaderPool.Put(r.fr)
-
 	r.fr = nil
 	return err
 }

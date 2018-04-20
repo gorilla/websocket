@@ -333,7 +333,6 @@ func newConnBRW(conn net.Conn, isServer bool, readBufferSize, writeBufferSize in
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
 	}
-
 	c.SetCloseHandler(nil)
 	c.SetPingHandler(nil)
 	c.SetPongHandler(nil)
@@ -755,7 +754,6 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 	if _, err = w.Write(data); err != nil {
 		return err
 	}
-
 	return w.Close()
 }
 
@@ -952,7 +950,6 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 			if c.readDecompress {
 				c.reader = c.newDecompressionReader(c.reader)
 			}
-
 			return frameType, c.reader, nil
 		}
 	}
@@ -979,11 +976,9 @@ func (r *messageReader) Read(b []byte) (int, error) {
 	for c.readErr == nil {
 
 		if c.readRemaining > 0 {
-			// Determine the size of the data to be read.
 			if int64(len(b)) > c.readRemaining {
 				b = b[:c.readRemaining]
 			}
-
 			n, err := c.br.Read(b)
 			c.readErr = hideTempErr(err)
 			if c.isServer {
@@ -993,7 +988,6 @@ func (r *messageReader) Read(b []byte) (int, error) {
 			if c.readRemaining > 0 && c.readErr == io.EOF {
 				c.readErr = errUnexpectedEOF
 			}
-
 			return n, c.readErr
 		}
 
@@ -1031,7 +1025,6 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 		return messageType, nil, err
 	}
 	p, err = ioutil.ReadAll(r)
-
 	return messageType, p, err
 }
 
