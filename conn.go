@@ -261,8 +261,8 @@ type Conn struct {
 	readErrCount  int
 	messageReader *messageReader // the current low-level reader
 
-	readDecompress         bool                          // whether last read frame had RSV1 set
-	newDecompressionReader func(io.Reader) io.ReadCloser // arges may flateReadWrapper struct
+	readDecompress         bool // whether last read frame had RSV1 set
+	newDecompressionReader func(io.Reader) io.ReadCloser
 }
 
 func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) *Conn {
@@ -752,7 +752,7 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 	if err != nil {
 		return err
 	}
-	if _, err := w.Write(data); err != nil {
+	if _, err = w.Write(data); err != nil {
 		return err
 	}
 
