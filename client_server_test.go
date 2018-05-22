@@ -6,6 +6,7 @@ package websocket
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -16,6 +17,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/http/httptrace"
 	"net/url"
 	"reflect"
 	"strings"
@@ -655,6 +657,34 @@ func TestSocksProxyDial(t *testing.T) {
 	ws, _, err := cstDialer.Dial(s.URL, nil)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
+	}
+	defer ws.Close()
+	sendRecv(t, ws)
+}
+
+func TestDialWithContext(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	var headersWrote, requestWrote bool
+	trace := &httptrace.ClientTrace{
+		WroteHeaders: func() {
+			headersWrote = true
+		},
+		WroteRequest: func(httptrace.WroteRequestInfo) {
+			requestWrote = true
+		},
+	}
+	ctx := httptrace.WithClientTrace(context.Background(), trace)
+	ws, _, err := cstDialer.DialWithContext(s.URL, nil, ctx)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	if !headersWrote {
+		t.Fatal("Headers was not written")
+	}
+	if !requestWrote {
+		t.Fatal("Request was not written")
 	}
 	defer ws.Close()
 	sendRecv(t, ws)

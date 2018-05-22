@@ -6,6 +6,7 @@ package websocket
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"errors"
 	"io"
@@ -51,6 +52,10 @@ type Dialer struct {
 	// NetDial is nil, net.Dial is used.
 	NetDial func(network, addr string) (net.Conn, error)
 
+	// NetDialContext specifies the dial function for creating TCP connections. If
+	// NetDialContext is nil, net.DialContext is used.
+	NetDialContext func(ctx context.Context, network, addr string) (net.Conn, error)
+
 	// Proxy specifies a function to return a proxy for a given
 	// Request. If the function returns a non-nil error, the
 	// request is aborted with the provided error.
@@ -84,6 +89,19 @@ type Dialer struct {
 	Jar http.CookieJar
 }
 
+// Dial creates a new client connection. Use requestHeader to specify the
+// origin (Origin), subprotocols (Sec-WebSocket-Protocol) and cookies (Cookie).
+// Use the response.Header to get the selected subprotocol
+// (Sec-WebSocket-Protocol) and cookies (Set-Cookie).
+//
+// If the WebSocket handshake fails, ErrBadHandshake is returned along with a
+// non-nil *http.Response so that callers can handle redirects, authentication,
+// etcetera. The response body may not contain the entire response and does not
+// need to be closed by the application.
+func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Response, error) {
+	return d.DialWithContext(urlStr, requestHeader, context.Background())
+}
+
 var errMalformedURL = errors.New("malformed ws or wss URL")
 
 func hostPortNoPort(u *url.URL) (hostPort, hostNoPort string) {
@@ -113,17 +131,18 @@ var DefaultDialer = &Dialer{
 // nilDialer is dialer to use when receiver is nil.
 var nilDialer Dialer = *DefaultDialer
 
-// Dial creates a new client connection. Use requestHeader to specify the
+// DialWithContext creates a new client connection. Use requestHeader to specify the
 // origin (Origin), subprotocols (Sec-WebSocket-Protocol) and cookies (Cookie).
 // Use the response.Header to get the selected subprotocol
 // (Sec-WebSocket-Protocol) and cookies (Set-Cookie).
+//
+// The context will be used in the request and in the Dialer
 //
 // If the WebSocket handshake fails, ErrBadHandshake is returned along with a
 // non-nil *http.Response so that callers can handle redirects, authentication,
 // etcetera. The response body may not contain the entire response and does not
 // need to be closed by the application.
-func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Response, error) {
-
+func (d *Dialer) DialWithContext(urlStr string, requestHeader http.Header, ctx context.Context) (*Conn, *http.Response, error) {
 	if d == nil {
 		d = &nilDialer
 	}
@@ -161,6 +180,7 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 		Header:     make(http.Header),
 		Host:       u.Host,
 	}
+	req = req.WithContext(ctx)
 
 	// Set the cookies present in the cookie jar of the dialer
 	if d.Jar != nil {
@@ -212,8 +232,16 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 	// Get network dial function.
 	netDial := d.NetDial
 	if netDial == nil {
-		netDialer := &net.Dialer{Deadline: deadline}
-		netDial = netDialer.Dial
+		if d.NetDialContext == nil {
+			netDialer := &net.Dialer{Deadline: deadline}
+			netDial = func(network, addr string) (net.Conn, error) {
+				return netDialer.DialContext(ctx, network, addr)
+			}
+		} else {
+			netDial = func(network, addr string) (net.Conn, error) {
+				return d.NetDialContext(ctx, network, addr)
+			}
+		}
 	}
 
 	// If needed, wrap the dial function to set the connection deadline.
