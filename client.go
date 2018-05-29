@@ -82,6 +82,9 @@ type Dialer struct {
 	// If Jar is nil, cookies are not sent in requests and ignored
 	// in responses.
 	Jar http.CookieJar
+
+	//bind local ip
+	LocalAddr string
 }
 
 var errMalformedURL = errors.New("malformed ws or wss URL")
@@ -212,7 +215,21 @@ func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Re
 	// Get network dial function.
 	netDial := d.NetDial
 	if netDial == nil {
-		netDialer := &net.Dialer{Deadline: deadline}
+
+		var netDialer *net.Dialer
+		if len(d.LocalAddr) > 0 {
+			localAddr, err := net.ResolveIPAddr("ip", d.LocalAddr)
+			if err != nil {
+				return nil, nil, err
+			}
+			localTCPAddr := net.TCPAddr{
+				IP: localAddr.IP,
+			}
+			netDialer = &net.Dialer{Deadline: deadline, LocalAddr: &localTCPAddr}
+		} else {
+			netDialer = &net.Dialer{Deadline: deadline}
+		}
+
 		netDial = netDialer.Dial
 	}
 
