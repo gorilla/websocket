@@ -344,6 +344,65 @@ func TestDialTimeout(t *testing.T) {
 	}
 }
 
+// requireDeadlineNetConn fails the current test when Read or Write are called
+// with no deadline.
+type requireDeadlineNetConn struct {
+	t                  *testing.T
+	c                  net.Conn
+	readDeadlineIsSet  bool
+	writeDeadlineIsSet bool
+}
+
+func (c *requireDeadlineNetConn) SetDeadline(t time.Time) error {
+	c.writeDeadlineIsSet = !t.Equal(time.Time{})
+	c.readDeadlineIsSet = c.writeDeadlineIsSet
+	return c.c.SetDeadline(t)
+}
+
+func (c *requireDeadlineNetConn) SetReadDeadline(t time.Time) error {
+	c.readDeadlineIsSet = !t.Equal(time.Time{})
+	return c.c.SetDeadline(t)
+}
+
+func (c *requireDeadlineNetConn) SetWriteDeadline(t time.Time) error {
+	c.writeDeadlineIsSet = !t.Equal(time.Time{})
+	return c.c.SetDeadline(t)
+}
+
+func (c *requireDeadlineNetConn) Write(p []byte) (int, error) {
+	if !c.writeDeadlineIsSet {
+		c.t.Fatalf("write with no deadline")
+	}
+	return c.c.Write(p)
+}
+
+func (c *requireDeadlineNetConn) Read(p []byte) (int, error) {
+	if !c.readDeadlineIsSet {
+		c.t.Fatalf("read with no deadline")
+	}
+	return c.c.Read(p)
+}
+
+func (c *requireDeadlineNetConn) Close() error         { return c.c.Close() }
+func (c *requireDeadlineNetConn) LocalAddr() net.Addr  { return c.c.LocalAddr() }
+func (c *requireDeadlineNetConn) RemoteAddr() net.Addr { return c.c.RemoteAddr() }
+
+func TestHandshakeTimeout(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	d := cstDialer
+	d.NetDial = func(n, a string) (net.Conn, error) {
+		c, err := net.Dial(n, a)
+		return &requireDeadlineNetConn{c: c, t: t}, err
+	}
+	ws, _, err := d.Dial(s.URL, nil)
+	if err != nil {
+		t.Fatal("Dial:", err)
+	}
+	ws.Close()
+}
+
 func TestDialBadScheme(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()
