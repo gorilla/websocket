@@ -42,6 +42,12 @@ var cstDialer = Dialer{
 	HandshakeTimeout: 30 * time.Second,
 }
 
+var cstDialerWithoutHandshakeTimeout = Dialer{
+	Subprotocols:    []string{"p1", "p2"},
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
+
 type cstHandler struct{ *testing.T }
 
 type cstServer struct {
@@ -405,6 +411,26 @@ func TestHandshakeTimeout(t *testing.T) {
 	ws.Close()
 }
 
+func TestHandshakeTimeoutInContext(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	d := cstDialerWithoutHandshakeTimeout
+	d.NetDialContext = func(ctx context.Context, n, a string) (net.Conn, error) {
+		netDialer := &net.Dialer{}
+		c, err := netDialer.DialContext(ctx, n, a)
+		return &requireDeadlineNetConn{c: c, t: t}, err
+	}
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(30*time.Second))
+	defer cancel()
+	ws, _, err := d.DialContext(s.URL, nil, ctx)
+	if err != nil {
+		t.Fatal("Dial:", err)
+	}
+	ws.Close()
+}
+
 func TestDialBadScheme(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()
@@ -662,11 +688,9 @@ func TestSocksProxyDial(t *testing.T) {
 	sendRecv(t, ws)
 }
 
-func TestDialWithContext(t *testing.T) {
-	s := newServer(t)
-	defer s.Close()
+func TestTracingDialWithContext(t *testing.T) {
 
-	var headersWrote, requestWrote bool
+	var headersWrote, requestWrote, getConn, gotConn, connectDone, TLSHandshakeStart, TLSHandshakeDone, gotFirstResponseByte bool
 	trace := &httptrace.ClientTrace{
 		WroteHeaders: func() {
 			headersWrote = true
@@ -674,18 +698,105 @@ func TestDialWithContext(t *testing.T) {
 		WroteRequest: func(httptrace.WroteRequestInfo) {
 			requestWrote = true
 		},
+		GetConn: func(hostPort string) {
+			getConn = true
+		},
+		GotConn: func(info httptrace.GotConnInfo) {
+			gotConn = true
+		},
+		ConnectDone: func(network, addr string, err error) {
+			connectDone = true
+		},
+		TLSHandshakeStart: func() {
+			TLSHandshakeStart = true
+		},
+		TLSHandshakeDone: func(state tls.ConnectionState, e error) {
+			TLSHandshakeDone = true
+		},
+		GotFirstResponseByte: func() {
+			gotFirstResponseByte = true
+		},
 	}
 	ctx := httptrace.WithClientTrace(context.Background(), trace)
-	ws, _, err := cstDialer.DialWithContext(s.URL, nil, ctx)
+
+	s := newTLSServer(t)
+	defer s.Close()
+
+	certs := x509.NewCertPool()
+	for _, c := range s.TLS.Certificates {
+		roots, err := x509.ParseCertificates(c.Certificate[len(c.Certificate)-1])
+		if err != nil {
+			t.Fatalf("error parsing server's root cert: %v", err)
+		}
+		for _, root := range roots {
+			certs.AddCert(root)
+		}
+	}
+
+	d := cstDialer
+	d.TLSClientConfig = &tls.Config{RootCAs: certs}
+
+	ws, _, err := d.DialContext(s.URL, nil, ctx)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
+
 	if !headersWrote {
 		t.Fatal("Headers was not written")
 	}
 	if !requestWrote {
 		t.Fatal("Request was not written")
 	}
+	if !getConn {
+		t.Fatal("getConn was not called")
+	}
+	if !gotConn {
+		t.Fatal("gotConn was not called")
+	}
+	if !connectDone {
+		t.Fatal("connectDone was not called")
+	}
+	if !TLSHandshakeStart {
+		t.Fatal("TLSHandshakeStart was not called")
+	}
+	if !TLSHandshakeDone {
+		t.Fatal("TLSHandshakeDone was not called")
+	}
+	if !gotFirstResponseByte {
+		t.Fatal("GotFirstResponseByte was not called")
+	}
+
+	defer ws.Close()
+	sendRecv(t, ws)
+}
+
+func TestEmptyTracingDialWithContext(t *testing.T) {
+
+	trace := &httptrace.ClientTrace{}
+	ctx := httptrace.WithClientTrace(context.Background(), trace)
+
+	s := newTLSServer(t)
+	defer s.Close()
+
+	certs := x509.NewCertPool()
+	for _, c := range s.TLS.Certificates {
+		roots, err := x509.ParseCertificates(c.Certificate[len(c.Certificate)-1])
+		if err != nil {
+			t.Fatalf("error parsing server's root cert: %v", err)
+		}
+		for _, root := range roots {
+			certs.AddCert(root)
+		}
+	}
+
+	d := cstDialer
+	d.TLSClientConfig = &tls.Config{RootCAs: certs}
+
+	ws, _, err := d.DialContext(s.URL, nil, ctx)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+
 	defer ws.Close()
 	sendRecv(t, ws)
 }
