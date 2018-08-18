@@ -43,7 +43,7 @@ func textMessages(num int) [][]byte {
 
 func BenchmarkWriteNoCompression(b *testing.B) {
 	w := ioutil.Discard
-	c := newConn(fakeNetConn{Reader: nil, Writer: w}, false, 1024, 1024)
+	c := newTestConn(nil, w, false)
 	messages := textMessages(100)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -54,7 +54,7 @@ func BenchmarkWriteNoCompression(b *testing.B) {
 
 func BenchmarkWriteWithCompression(b *testing.B) {
 	w := ioutil.Discard
-	c := newConn(fakeNetConn{Reader: nil, Writer: w}, false, 1024, 1024)
+	c := newTestConn(nil, w, false)
 	messages := textMessages(100)
 	c.enableWriteCompression = true
 	c.newCompressionWriter = compressNoContextTakeover
@@ -66,7 +66,7 @@ func BenchmarkWriteWithCompression(b *testing.B) {
 }
 
 func TestValidCompressionLevel(t *testing.T) {
-	c := newConn(fakeNetConn{}, false, 1024, 1024)
+	c := newTestConn(nil, nil, false)
 	for _, level := range []int{minCompressionLevel - 1, maxCompressionLevel + 1} {
 		if err := c.SetCompressionLevel(level); err == nil {
 			t.Errorf("no error for level %d", level)

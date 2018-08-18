@@ -70,7 +70,7 @@ func (b *broadcastBench) makeConns(numConns int) {
 	conns := make([]*broadcastConn, numConns)
 
 	for i := 0; i < numConns; i++ {
-		c := newConn(fakeNetConn{Reader: nil, Writer: b.w}, true, 1024, 1024)
+		c := newTestConn(nil, b.w, true)
 		if b.compression {
 			c.enableWriteCompression = true
 			c.newCompressionWriter = compressNoContextTakeover
