@@ -110,39 +110,37 @@ type CloseError struct {
 }
 
 func (e *CloseError) Error() string {
-	s := []byte("websocket: close ")
-	s = strconv.AppendInt(s, int64(e.Code), 10)
+	s := "websocket: close " + strconv.Itoa(e.Code)
 	switch e.Code {
 	case CloseNormalClosure:
-		s = append(s, " (normal)"...)
+		s += " (normal)"
 	case CloseGoingAway:
-		s = append(s, " (going away)"...)
+		s += " (going away)"
 	case CloseProtocolError:
-		s = append(s, " (protocol error)"...)
+		s += " (protocol error)"
 	case CloseUnsupportedData:
-		s = append(s, " (unsupported data)"...)
+		s += " (unsupported data)"
 	case CloseNoStatusReceived:
-		s = append(s, " (no status)"...)
+		s += " (no status)"
 	case CloseAbnormalClosure:
-		s = append(s, " (abnormal closure)"...)
+		s += " (abnormal closure)"
 	case CloseInvalidFramePayloadData:
-		s = append(s, " (invalid payload data)"...)
+		s += " (invalid payload data)"
 	case ClosePolicyViolation:
-		s = append(s, " (policy violation)"...)
+		s += " (policy violation)"
 	case CloseMessageTooBig:
-		s = append(s, " (message too big)"...)
+		s += " (message too big)"
 	case CloseMandatoryExtension:
-		s = append(s, " (mandatory extension missing)"...)
+		s += " (mandatory extension missing)"
 	case CloseInternalServerErr:
-		s = append(s, " (internal server error)"...)
+		s += " (internal server error)"
 	case CloseTLSHandshake:
-		s = append(s, " (TLS handshake error)"...)
+		s += " (TLS handshake error)"
 	}
 	if e.Text != "" {
-		s = append(s, ": "...)
-		s = append(s, e.Text...)
+		s += ": " + e.Text
 	}
-	return string(s)
+	return s
 }
 
 // IsCloseError returns boolean indicating whether the error is a *CloseError
@@ -223,6 +221,9 @@ func isValidReceivedCloseCode(code int) bool {
 	return validReceivedCloseCodes[code] || (code >= 3000 && code <= 4999)
 }
 
+// CloseHandler is a callback esed on closure.
+type CloseHandler func(code int, text string) error
+
 // The Conn type represents a WebSocket connection.
 type Conn struct {
 	conn        net.Conn
@@ -255,7 +256,7 @@ type Conn struct {
 	readMaskKey   [4]byte
 	handlePong    func(string) error
 	handlePing    func(string) error
-	handleClose   func(int, string) error
+	handleClose   CloseHandler
 	readErrCount  int
 	messageReader *messageReader // the current low-level reader
 
@@ -267,6 +268,7 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) 
 	return newConnBRW(conn, isServer, readBufferSize, writeBufferSize, nil)
 }
 
+// writeHook is an io.Writer that steals the buffer that it is called with.
 type writeHook struct {
 	p []byte
 }
@@ -1041,7 +1043,7 @@ func (c *Conn) SetReadLimit(limit int64) {
 }
 
 // CloseHandler returns the current close handler
-func (c *Conn) CloseHandler() func(code int, text string) error {
+func (c *Conn) CloseHandler() CloseHandler {
 	return c.handleClose
 }
 
@@ -1059,7 +1061,7 @@ func (c *Conn) CloseHandler() func(code int, text string) error {
 // normal error handling. Applications should only set a close handler when the
 // application must perform some action before sending a close message back to
 // the peer.
-func (c *Conn) SetCloseHandler(h func(code int, text string) error) {
+func (c *Conn) SetCloseHandler(h CloseHandler) {
 	if h == nil {
 		h = func(code int, text string) error {
 			message := FormatCloseMessage(code, "")
