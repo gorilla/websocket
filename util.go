@@ -32,122 +32,152 @@ func generateChallengeKey() (string, error) {
 }
 
 // Octet types from RFC 2616.
-var octetTypes [256]byte
+//
+// OCTET      = <any 8-bit sequence of data>
+// CHAR       = <any US-ASCII character (octets 0 - 127)>
+// CTL        = <any US-ASCII control character (octets 0 - 31) and DEL (127)>
+// CR         = <US-ASCII CR, carriage return (13)>
+// LF         = <US-ASCII LF, linefeed (10)>
+// SP         = <US-ASCII SP, space (32)>
+// HT         = <US-ASCII HT, horizontal-tab (9)>
+// <">        = <US-ASCII double-quote mark (34)>
+// CRLF       = CR LF
+// LWS        = [CRLF] 1*( SP | HT )
+// TEXT       = <any OCTET except CTLs, but including LWS>
+// separators = "(" | ")" | "<" | ">" | "@" | "," | ";" | ":" | "\" | <">
+//              | "/" | "[" | "]" | "?" | "=" | "{" | "}" | SP | HT
+// token      = 1*<any CHAR except CTLs or separators>
+// qdtext     = <any TEXT except <">>
 
-const (
-	isTokenOctet = 1 << iota
-	isSpaceOctet
-)
-
-func init() {
-	// From RFC 2616
-	//
-	// OCTET      = <any 8-bit sequence of data>
-	// CHAR       = <any US-ASCII character (octets 0 - 127)>
-	// CTL        = <any US-ASCII control character (octets 0 - 31) and DEL (127)>
-	// CR         = <US-ASCII CR, carriage return (13)>
-	// LF         = <US-ASCII LF, linefeed (10)>
-	// SP         = <US-ASCII SP, space (32)>
-	// HT         = <US-ASCII HT, horizontal-tab (9)>
-	// <">        = <US-ASCII double-quote mark (34)>
-	// CRLF       = CR LF
-	// LWS        = [CRLF] 1*( SP | HT )
-	// TEXT       = <any OCTET except CTLs, but including LWS>
-	// separators = "(" | ")" | "<" | ">" | "@" | "," | ";" | ":" | "\" | <">
-	//              | "/" | "[" | "]" | "?" | "=" | "{" | "}" | SP | HT
-	// token      = 1*<any CHAR except CTLs or separators>
-	// qdtext     = <any TEXT except <">>
-
-	for c := 0; c < 256; c++ {
-		var t byte
-		isCtl := c <= 31 || c == 127
-		isChar := 0 <= c && c <= 127
-		isSeparator := strings.IndexRune(" \t\"(),/:;<=>?@[]\\{}", rune(c)) >= 0
-		if strings.IndexRune(" \t\r\n", rune(c)) >= 0 {
-			t |= isSpaceOctet
-		}
-		if isChar && !isCtl && !isSeparator {
-			t |= isTokenOctet
-		}
-		octetTypes[c] = t
-	}
-}
-
-func skipSpace(s string) (rest string) {
-	i := 0
-	for ; i < len(s); i++ {
-		if octetTypes[s[i]]&isSpaceOctet == 0 {
-			break
+func skipSpace(s string) string {
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case ' ', '\t', '\r', '\n':
+		default:
+			return s[i:]
 		}
 	}
-	return s[i:]
+	return ""
 }
 
 func nextToken(s string) (token, rest string) {
 	i := 0
+loop:
 	for ; i < len(s); i++ {
-		if octetTypes[s[i]]&isTokenOctet == 0 {
+		c := s[i]
+		if c <= 31 || c >= 127 { // control characters & non-ascii are not token octets
 			break
+		}
+		switch c { //separators are not token octets
+		case ' ', '\t', '"', '(', ')', ',', '/', ':', ';', '<',
+			'=', '>', '?', '@', '[', ']', '\\', '{', '}':
+			break loop
 		}
 	}
 	return s[:i], s[i:]
 }
 
+// nextTokenOrQuoted gets the next token, unescaping and unquoting quoted tokens
 func nextTokenOrQuoted(s string) (value string, rest string) {
+	// if it isnt quoted, then regular tokenization rules apply
 	if !strings.HasPrefix(s, "\"") {
 		return nextToken(s)
 	}
+
+	// trim off opening quote
 	s = s[1:]
-	for i := 0; i < len(s); i++ {
+
+	// find closing quote while counting escapes
+	escapes := 0     // count escapes
+	escaped := false // whether the next char is escaped
+	i := 0
+scan:
+	for ; i < len(s); i++ {
+		// skip escaped characters
+		if escaped {
+			escaped = false
+			continue
+		}
+
 		switch s[i] {
 		case '"':
-			return s[:i], s[i+1:]
+			// closing quote
+			break scan
 		case '\\':
-			p := make([]byte, len(s)-1)
-			j := copy(p, s[:i])
-			escape := true
-			for i = i + 1; i < len(s); i++ {
-				b := s[i]
-				switch {
-				case escape:
-					escape = false
-					p[j] = b
-					j++
-				case b == '\\':
-					escape = true
-				case b == '"':
-					return string(p[:j]), s[i+1:]
-				default:
-					p[j] = b
-					j++
-				}
-			}
-			return "", ""
+			// escape sequence
+			escaped = true
+			escapes++
 		}
 	}
-	return "", ""
+
+	// handle unterminated quoted token
+	if i == len(s) {
+		return "", ""
+	}
+
+	// split out token
+	value, rest = s[:i], s[i+1:]
+
+	// handle token without escapes
+	if escapes == 0 {
+		return value, rest
+	}
+
+	// unescape token
+	buf := make([]byte, len(value)-escapes)
+	j := 0
+	escaped = false
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+
+		// handle escape sequence
+		if c == '\\' && !escaped {
+			escaped = true
+			continue
+		}
+		escaped = false
+
+		// copy character
+		buf[j] = c
+		j++
+	}
+	return string(buf), rest
 }
 
 // equalASCIIFold returns true if s is equal to t with ASCII case folding.
 func equalASCIIFold(s, t string) bool {
 	for s != "" && t != "" {
-		sr, size := utf8.DecodeRuneInString(s)
-		s = s[size:]
-		tr, size := utf8.DecodeRuneInString(t)
-		t = t[size:]
-		if sr == tr {
-			continue
+		// get first rune from both strings
+		var sr, tr rune
+		if s[0] < utf8.RuneSelf {
+			sr, s = rune(s[0]), s[1:]
+		} else {
+			r, size := utf8.DecodeRuneInString(s)
+			sr, s = r, s[size:]
 		}
-		if 'A' <= sr && sr <= 'Z' {
-			sr = sr + 'a' - 'A'
+		if t[0] < utf8.RuneSelf {
+			tr, t = rune(t[0]), t[1:]
+		} else {
+			r, size := utf8.DecodeRuneInString(t)
+			tr, t = r, t[size:]
 		}
-		if 'A' <= tr && tr <= 'Z' {
-			tr = tr + 'a' - 'A'
-		}
-		if sr != tr {
+
+		// compare runes
+		switch {
+		case sr == tr:
+		case 'A' <= sr && sr <= 'Z':
+			if sr+'a'-'A' != tr {
+				return false
+			}
+		case 'A' <= tr && tr <= 'Z':
+			if tr+'a'-'A' != sr {
+				return false
+			}
+		default:
 			return false
 		}
 	}
+
 	return s == t
 }
 
@@ -178,7 +208,7 @@ headers:
 	return false
 }
 
-// parseExtensiosn parses WebSocket extensions from a header.
+// parseExtensions parses WebSocket extensions from a header.
 func parseExtensions(header http.Header) []map[string]string {
 	// From RFC 6455:
 	//

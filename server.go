@@ -7,7 +7,6 @@ package websocket
 import (
 	"bufio"
 	"errors"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -159,17 +158,12 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		}
 	}
 
-	var (
-		netConn net.Conn
-		err     error
-	)
-
 	h, ok := w.(http.Hijacker)
 	if !ok {
 		return u.returnError(w, r, http.StatusInternalServerError, "websocket: response does not implement http.Hijacker")
 	}
 	var brw *bufio.ReadWriter
-	netConn, brw, err = h.Hijack()
+	netConn, brw, err := h.Hijack()
 	if err != nil {
 		return u.returnError(w, r, http.StatusInternalServerError, err.Error())
 	}
@@ -187,48 +181,55 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		c.newDecompressionReader = decompressNoContextTakeover
 	}
 
-	p := c.writeBuf[:0]
-	p = append(p, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "...)
-	p = append(p, computeAcceptKey(challengeKey)...)
-	p = append(p, "\r\n"...)
+	// workaround for haxe in newConnBRW
+	brw.Writer.Reset(netConn)
+
+	// Clear deadlines set by HTTP server.
+	netConn.SetReadDeadline(time.Time{})
+	// start handshake timeout
+	if u.HandshakeTimeout > 0 {
+		netConn.SetWriteDeadline(time.Now().Add(u.HandshakeTimeout))
+	}
+
+	// write handshake
+	brw.WriteString("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ")
+	brw.WriteString(computeAcceptKey(challengeKey))
+	brw.WriteString("\r\n")
 	if c.subprotocol != "" {
-		p = append(p, "Sec-WebSocket-Protocol: "...)
-		p = append(p, c.subprotocol...)
-		p = append(p, "\r\n"...)
+		brw.WriteString("Sec-WebSocket-Protocol: ")
+		brw.WriteString(c.subprotocol)
+		brw.WriteString("\r\n")
 	}
 	if compress {
-		p = append(p, "Sec-WebSocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover\r\n"...)
+		brw.WriteString("Sec-WebSocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover\r\n")
 	}
 	for k, vs := range responseHeader {
 		if k == "Sec-Websocket-Protocol" {
 			continue
 		}
 		for _, v := range vs {
-			p = append(p, k...)
-			p = append(p, ": "...)
+			brw.WriteString(k)
+			brw.WriteString(": ")
 			for i := 0; i < len(v); i++ {
 				b := v[i]
 				if b <= 31 {
 					// prevent response splitting.
 					b = ' '
 				}
-				p = append(p, b)
+				brw.WriteByte(b)
 			}
-			p = append(p, "\r\n"...)
+			brw.WriteString("\r\n")
 		}
 	}
-	p = append(p, "\r\n"...)
+	brw.WriteString("\r\n")
 
-	// Clear deadlines set by HTTP server.
-	netConn.SetDeadline(time.Time{})
-
-	if u.HandshakeTimeout > 0 {
-		netConn.SetWriteDeadline(time.Now().Add(u.HandshakeTimeout))
-	}
-	if _, err = netConn.Write(p); err != nil {
+	// flush handshake
+	if err = brw.Writer.Flush(); err != nil {
 		netConn.Close()
 		return nil, err
 	}
+
+	// clear handshake write timeout
 	if u.HandshakeTimeout > 0 {
 		netConn.SetWriteDeadline(time.Time{})
 	}

@@ -10,12 +10,32 @@ import (
 	"testing"
 )
 
+var nextTokenTests = []struct {
+	input       string
+	token, next string
+}{
+	{"other,websocket,more", "other", ",websocket,more"},
+	{"websocket,more", "websocket", ",more"},
+	{"more", "more", ""},
+}
+
+func TestNextToken(t *testing.T) {
+	for _, tt := range nextTokenTests {
+		token, next := nextToken(tt.input)
+		if token != tt.token || next != tt.next {
+			t.Errorf("nextToken(%q) = %q, %q, want %q, %q", tt.input, token, next, tt.token, tt.next)
+		}
+	}
+}
+
 var equalASCIIFoldTests = []struct {
 	t, s string
 	eq   bool
 }{
 	{"WebSocket", "websocket", true},
 	{"websocket", "WebSocket", true},
+	{"websocket", "WebRocket", false},
+	{"WebRocket", "websocket", false},
 	{"Öyster", "öyster", false},
 }
 
