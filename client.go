@@ -122,7 +122,7 @@ var DefaultDialer = &Dialer{
 }
 
 // nilDialer is dialer to use when receiver is nil.
-var nilDialer Dialer = *DefaultDialer
+var nilDialer = *DefaultDialer
 
 // Dial creates a new client connection. Use requestHeader to specify the
 // origin (Origin), subprotocols (Sec-WebSocket-Protocol) and cookies (Cookie).

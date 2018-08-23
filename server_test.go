@@ -58,9 +58,9 @@ var checkSameOriginTests = []struct {
 	ok bool
 	r  *http.Request
 }{
-	{false, &http.Request{Host: "example.org", Header: map[string][]string{"Origin": []string{"https://other.org"}}}},
-	{true, &http.Request{Host: "example.org", Header: map[string][]string{"Origin": []string{"https://example.org"}}}},
-	{true, &http.Request{Host: "Example.org", Header: map[string][]string{"Origin": []string{"https://example.org"}}}},
+	{false, &http.Request{Host: "example.org", Header: map[string][]string{"Origin": {"https://other.org"}}}},
+	{true, &http.Request{Host: "example.org", Header: map[string][]string{"Origin": {"https://example.org"}}}},
+	{true, &http.Request{Host: "Example.org", Header: map[string][]string{"Origin": {"https://example.org"}}}},
 }
 
 func TestCheckSameOrigin(t *testing.T) {
