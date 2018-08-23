@@ -136,10 +136,6 @@ var nilDialer Dialer = *DefaultDialer
 // etcetera. The response body may not contain the entire response and does not
 // need to be closed by the application.
 func (d *Dialer) DialContext(urlStr string, requestHeader http.Header, ctx context.Context) (*Conn, *http.Response, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
 	if d == nil {
 		d = &nilDialer
 	}
@@ -304,13 +300,14 @@ func (d *Dialer) DialContext(urlStr string, requestHeader http.Header, ctx conte
 		}
 		tlsConn := tls.Client(netConn, cfg)
 		netConn = tlsConn
-		if trace != nil && trace.TLSHandshakeStart != nil {
-			trace.TLSHandshakeStart()
+
+		var err error
+		if trace != nil {
+			err = doHandshakeWithTrace(trace, tlsConn, cfg)
+		} else {
+			err = doHandshake(tlsConn, cfg)
 		}
-		err := doHandshake(tlsConn, cfg)
-		if trace != nil && trace.TLSHandshakeDone != nil {
-			trace.TLSHandshakeDone(tlsConn.ConnectionState(), err)
-		}
+
 		if err != nil {
 			return nil, nil, err
 		}

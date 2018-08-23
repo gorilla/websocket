@@ -690,7 +690,7 @@ func TestSocksProxyDial(t *testing.T) {
 
 func TestTracingDialWithContext(t *testing.T) {
 
-	var headersWrote, requestWrote, getConn, gotConn, connectDone, TLSHandshakeStart, TLSHandshakeDone, gotFirstResponseByte bool
+	var headersWrote, requestWrote, getConn, gotConn, connectDone, gotFirstResponseByte bool
 	trace := &httptrace.ClientTrace{
 		WroteHeaders: func() {
 			headersWrote = true
@@ -706,12 +706,6 @@ func TestTracingDialWithContext(t *testing.T) {
 		},
 		ConnectDone: func(network, addr string, err error) {
 			connectDone = true
-		},
-		TLSHandshakeStart: func() {
-			TLSHandshakeStart = true
-		},
-		TLSHandshakeDone: func(state tls.ConnectionState, e error) {
-			TLSHandshakeDone = true
 		},
 		GotFirstResponseByte: func() {
 			gotFirstResponseByte = true
@@ -755,12 +749,6 @@ func TestTracingDialWithContext(t *testing.T) {
 	}
 	if !connectDone {
 		t.Fatal("connectDone was not called")
-	}
-	if !TLSHandshakeStart {
-		t.Fatal("TLSHandshakeStart was not called")
-	}
-	if !TLSHandshakeDone {
-		t.Fatal("TLSHandshakeDone was not called")
 	}
 	if !gotFirstResponseByte {
 		t.Fatal("GotFirstResponseByte was not called")
