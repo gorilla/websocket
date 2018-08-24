@@ -25,7 +25,9 @@ func (c *Conn) WriteJSON(v interface{}) error {
 	if err != nil {
 		return err
 	}
-	err1 := json.NewEncoder(w).Encode(v)
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	err1 := enc.Encode(v)
 	err2 := w.Close()
 	if err1 != nil {
 		return err1
