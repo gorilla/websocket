@@ -424,7 +424,7 @@ func TestHandshakeTimeoutInContext(t *testing.T) {
 
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(30*time.Second))
 	defer cancel()
-	ws, _, err := d.DialContext(s.URL, nil, ctx)
+	ws, _, err := d.DialContext(ctx, s.URL, nil)
 	if err != nil {
 		t.Fatal("Dial:", err)
 	}
@@ -730,7 +730,7 @@ func TestTracingDialWithContext(t *testing.T) {
 	d := cstDialer
 	d.TLSClientConfig = &tls.Config{RootCAs: certs}
 
-	ws, _, err := d.DialContext(s.URL, nil, ctx)
+	ws, _, err := d.DialContext(ctx, s.URL, nil)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -780,7 +780,7 @@ func TestEmptyTracingDialWithContext(t *testing.T) {
 	d := cstDialer
 	d.TLSClientConfig = &tls.Config{RootCAs: certs}
 
-	ws, _, err := d.DialContext(s.URL, nil, ctx)
+	ws, _, err := d.DialContext(ctx, s.URL, nil)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
