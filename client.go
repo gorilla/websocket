@@ -103,7 +103,7 @@ type Dialer struct {
 
 // Dial creates a new client connection by calling DialContext with a background context.
 func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Response, error) {
-	return d.DialContext(urlStr, requestHeader, context.Background())
+	return d.DialContext(context.Background(), urlStr, requestHeader)
 }
 
 var errMalformedURL = errors.New("malformed ws or wss URL")
@@ -146,7 +146,7 @@ var nilDialer = *DefaultDialer
 // non-nil *http.Response so that callers can handle redirects, authentication,
 // etcetera. The response body may not contain the entire response and does not
 // need to be closed by the application.
-func (d *Dialer) DialContext(urlStr string, requestHeader http.Header, ctx context.Context) (*Conn, *http.Response, error) {
+func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader http.Header) (*Conn, *http.Response, error) {
 	if d == nil {
 		d = &nilDialer
 	}
