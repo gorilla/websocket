@@ -449,7 +449,7 @@ func (c *requireDeadlineNetConn) LocalAddr() net.Addr  { return c.c.LocalAddr() 
 func (c *requireDeadlineNetConn) RemoteAddr() net.Addr { return c.c.RemoteAddr() }
 
 func TestHandshakeTimeout(t *testing.T) {
-	s := newServer(t)
+	s := newServer(t, cstHandlerConfig{})
 	defer s.Close()
 
 	d := cstDialer
@@ -465,7 +465,7 @@ func TestHandshakeTimeout(t *testing.T) {
 }
 
 func TestHandshakeTimeoutInContext(t *testing.T) {
-	s := newServer(t)
+	s := newServer(t, cstHandlerConfig{})
 	defer s.Close()
 
 	d := cstDialerWithoutHandshakeTimeout
@@ -782,7 +782,7 @@ func TestTracingDialWithContext(t *testing.T) {
 	}
 	ctx := httptrace.WithClientTrace(context.Background(), trace)
 
-	s := newTLSServer(t)
+	s := newTLSServer(t, cstHandlerConfig{})
 	defer s.Close()
 
 	certs := x509.NewCertPool()
@@ -832,7 +832,7 @@ func TestEmptyTracingDialWithContext(t *testing.T) {
 	trace := &httptrace.ClientTrace{}
 	ctx := httptrace.WithClientTrace(context.Background(), trace)
 
-	s := newTLSServer(t)
+	s := newTLSServer(t, cstHandlerConfig{})
 	defer s.Close()
 
 	certs := x509.NewCertPool()

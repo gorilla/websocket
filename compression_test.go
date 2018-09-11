@@ -67,7 +67,7 @@ func BenchmarkWriteWithCompression(b *testing.B) {
 
 func BenchmarkWriteWithCompressionOfContextTakeover(b *testing.B) {
 	w := ioutil.Discard
-	c := newConn(fakeNetConn{Reader: nil, Writer: w}, false, 1024, 1024)
+	c := newTestConn(nil, w, false)
 	messages := textMessages(100)
 	c.enableWriteCompression = true
 	var f contextTakeoverWriterFactory
