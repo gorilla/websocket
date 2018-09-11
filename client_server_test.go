@@ -6,6 +6,7 @@ package websocket
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -16,6 +17,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/http/httptrace"
 	"net/url"
 	"reflect"
 	"strings"
@@ -47,6 +49,12 @@ type cstHandlerConfig struct {
 type cstHandler struct {
 	*testing.T
 	cstHandlerConfig
+}
+
+var cstDialerWithoutHandshakeTimeout = Dialer{
+	Subprotocols:    []string{"p1", "p2"},
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
 }
 
 type cstServer struct {
@@ -397,6 +405,85 @@ func TestDialTimeout(t *testing.T) {
 	}
 }
 
+// requireDeadlineNetConn fails the current test when Read or Write are called
+// with no deadline.
+type requireDeadlineNetConn struct {
+	t                  *testing.T
+	c                  net.Conn
+	readDeadlineIsSet  bool
+	writeDeadlineIsSet bool
+}
+
+func (c *requireDeadlineNetConn) SetDeadline(t time.Time) error {
+	c.writeDeadlineIsSet = !t.Equal(time.Time{})
+	c.readDeadlineIsSet = c.writeDeadlineIsSet
+	return c.c.SetDeadline(t)
+}
+
+func (c *requireDeadlineNetConn) SetReadDeadline(t time.Time) error {
+	c.readDeadlineIsSet = !t.Equal(time.Time{})
+	return c.c.SetDeadline(t)
+}
+
+func (c *requireDeadlineNetConn) SetWriteDeadline(t time.Time) error {
+	c.writeDeadlineIsSet = !t.Equal(time.Time{})
+	return c.c.SetDeadline(t)
+}
+
+func (c *requireDeadlineNetConn) Write(p []byte) (int, error) {
+	if !c.writeDeadlineIsSet {
+		c.t.Fatalf("write with no deadline")
+	}
+	return c.c.Write(p)
+}
+
+func (c *requireDeadlineNetConn) Read(p []byte) (int, error) {
+	if !c.readDeadlineIsSet {
+		c.t.Fatalf("read with no deadline")
+	}
+	return c.c.Read(p)
+}
+
+func (c *requireDeadlineNetConn) Close() error         { return c.c.Close() }
+func (c *requireDeadlineNetConn) LocalAddr() net.Addr  { return c.c.LocalAddr() }
+func (c *requireDeadlineNetConn) RemoteAddr() net.Addr { return c.c.RemoteAddr() }
+
+func TestHandshakeTimeout(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	d := cstDialer
+	d.NetDial = func(n, a string) (net.Conn, error) {
+		c, err := net.Dial(n, a)
+		return &requireDeadlineNetConn{c: c, t: t}, err
+	}
+	ws, _, err := d.Dial(s.URL, nil)
+	if err != nil {
+		t.Fatal("Dial:", err)
+	}
+	ws.Close()
+}
+
+func TestHandshakeTimeoutInContext(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	d := cstDialerWithoutHandshakeTimeout
+	d.NetDialContext = func(ctx context.Context, n, a string) (net.Conn, error) {
+		netDialer := &net.Dialer{}
+		c, err := netDialer.DialContext(ctx, n, a)
+		return &requireDeadlineNetConn{c: c, t: t}, err
+	}
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(30*time.Second))
+	defer cancel()
+	ws, _, err := d.DialContext(ctx, s.URL, nil)
+	if err != nil {
+		t.Fatal("Dial:", err)
+	}
+	ws.Close()
+}
+
 func TestDialBadScheme(t *testing.T) {
 	s := newServer(t, cstHandlerConfig{})
 	defer s.Close()
@@ -666,6 +753,107 @@ func TestSocksProxyDial(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
+	defer ws.Close()
+	sendRecv(t, ws)
+}
+
+func TestTracingDialWithContext(t *testing.T) {
+
+	var headersWrote, requestWrote, getConn, gotConn, connectDone, gotFirstResponseByte bool
+	trace := &httptrace.ClientTrace{
+		WroteHeaders: func() {
+			headersWrote = true
+		},
+		WroteRequest: func(httptrace.WroteRequestInfo) {
+			requestWrote = true
+		},
+		GetConn: func(hostPort string) {
+			getConn = true
+		},
+		GotConn: func(info httptrace.GotConnInfo) {
+			gotConn = true
+		},
+		ConnectDone: func(network, addr string, err error) {
+			connectDone = true
+		},
+		GotFirstResponseByte: func() {
+			gotFirstResponseByte = true
+		},
+	}
+	ctx := httptrace.WithClientTrace(context.Background(), trace)
+
+	s := newTLSServer(t)
+	defer s.Close()
+
+	certs := x509.NewCertPool()
+	for _, c := range s.TLS.Certificates {
+		roots, err := x509.ParseCertificates(c.Certificate[len(c.Certificate)-1])
+		if err != nil {
+			t.Fatalf("error parsing server's root cert: %v", err)
+		}
+		for _, root := range roots {
+			certs.AddCert(root)
+		}
+	}
+
+	d := cstDialer
+	d.TLSClientConfig = &tls.Config{RootCAs: certs}
+
+	ws, _, err := d.DialContext(ctx, s.URL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+
+	if !headersWrote {
+		t.Fatal("Headers was not written")
+	}
+	if !requestWrote {
+		t.Fatal("Request was not written")
+	}
+	if !getConn {
+		t.Fatal("getConn was not called")
+	}
+	if !gotConn {
+		t.Fatal("gotConn was not called")
+	}
+	if !connectDone {
+		t.Fatal("connectDone was not called")
+	}
+	if !gotFirstResponseByte {
+		t.Fatal("GotFirstResponseByte was not called")
+	}
+
+	defer ws.Close()
+	sendRecv(t, ws)
+}
+
+func TestEmptyTracingDialWithContext(t *testing.T) {
+
+	trace := &httptrace.ClientTrace{}
+	ctx := httptrace.WithClientTrace(context.Background(), trace)
+
+	s := newTLSServer(t)
+	defer s.Close()
+
+	certs := x509.NewCertPool()
+	for _, c := range s.TLS.Certificates {
+		roots, err := x509.ParseCertificates(c.Certificate[len(c.Certificate)-1])
+		if err != nil {
+			t.Fatalf("error parsing server's root cert: %v", err)
+		}
+		for _, root := range roots {
+			certs.AddCert(root)
+		}
+	}
+
+	d := cstDialer
+	d.TLSClientConfig = &tls.Config{RootCAs: certs}
+
+	ws, _, err := d.DialContext(ctx, s.URL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+
 	defer ws.Close()
 	sendRecv(t, ws)
 }
