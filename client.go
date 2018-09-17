@@ -193,6 +193,9 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		}
 	}
 
+	hostPort, hostNoPort := hostPortNoPort(u)
+	sniHostName := hostNoPort
+
 	// Set the request headers using the capitalization for names and values in
 	// RFC examples. Although the capitalization shouldn't matter, there are
 	// servers that depend on it. The Header.Set method is not used because the
@@ -209,6 +212,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		case k == "Host":
 			if len(vs) > 0 {
 				req.Host = vs[0]
+				sniHostName = vs[0]
 			}
 		case k == "Upgrade" ||
 			k == "Connection" ||
@@ -282,7 +286,6 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		}
 	}
 
-	hostPort, hostNoPort := hostPortNoPort(u)
 	trace := httptrace.ContextClientTrace(ctx)
 	if trace != nil && trace.GetConn != nil {
 		trace.GetConn(hostPort)
@@ -307,7 +310,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 	if u.Scheme == "https" {
 		cfg := cloneTLSConfig(d.TLSClientConfig)
 		if cfg.ServerName == "" {
-			cfg.ServerName = hostNoPort
+			cfg.ServerName = sniHostName
 		}
 		tlsConn := tls.Client(netConn, cfg)
 		netConn = tlsConn
