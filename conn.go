@@ -1035,10 +1035,11 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 }
 
 // SetReadDeadline sets the read deadline on the underlying network connection.
-// After a read has timed out, the websocket connection state is corrupt and
-// all future reads will return an error. A zero value for t means reads will
-// not time out.
+// After a read has timed out, the websocket connection state can be refreshed
+// by calling SetReadDeadline. A zero value for t means reads will not time out.
 func (c *Conn) SetReadDeadline(t time.Time) error {
+	c.readErr = nil
+	c.readErrCount = 0
 	return c.conn.SetReadDeadline(t)
 }
 
