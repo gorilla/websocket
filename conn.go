@@ -1184,8 +1184,8 @@ func maskBytes(key [4]byte, pos int, bytes []byte) int {
 	key64 := uint64(maskOrder.Uint32(key[:]))
 	key64 |= key64 << 32
 	key64 = bits.RotateLeft64(key64, -pos*8)
-	for ; len(bytes) - i > 7; i += 8 {
-		maskOrder.PutUint64(bytes[i:], maskOrder.Uint64(bytes[i:]) ^ key64)
+	for ; len(bytes)-i > 7; i += 8 {
+		maskOrder.PutUint64(bytes[i:], maskOrder.Uint64(bytes[i:])^key64)
 	}
 
 	// multipe of 8 did not change pos
