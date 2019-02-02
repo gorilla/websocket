@@ -1,6 +1,6 @@
 # Test Server
 
-This package contains a server for the [Autobahn WebSockets Test Suite](http://autobahn.ws/testsuite).
+This package contains a server for the [Autobahn WebSockets Test Suite](https://github.com/crossbario/autobahn-testsuite).
 
 To test the server, run
 

@@ -17,6 +17,7 @@ var equalASCIIFoldTests = []struct {
 	{"WebSocket", "websocket", true},
 	{"websocket", "WebSocket", true},
 	{"Öyster", "öyster", false},
+	{"WebSocket", "WetSocket", false},
 }
 
 func TestEqualASCIIFold(t *testing.T) {

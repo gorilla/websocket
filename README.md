@@ -27,7 +27,7 @@ package API is stable.
 ### Protocol Compliance
 
 The Gorilla WebSocket package passes the server tests in the [Autobahn Test
-Suite](http://autobahn.ws/testsuite) using the application in the [examples/autobahn
+Suite](https://github.com/crossbario/autobahn-testsuite) using the application in the [examples/autobahn
 subdirectory](https://github.com/gorilla/websocket/tree/master/examples/autobahn).
 
 ### Gorilla WebSocket compared with other packages

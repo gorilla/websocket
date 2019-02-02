@@ -227,10 +227,15 @@ func (p *simpleBufferPool) Put(v interface{}) {
 }
 
 func TestWriteBufferPool(t *testing.T) {
+	const message = "Now is the time for all good people to come to the aid of the party."
+
 	var buf bytes.Buffer
 	var pool simpleBufferPool
-	wc := newConn(fakeNetConn{Writer: &buf}, true, 1024, 1024, &pool, nil, nil)
 	rc := newTestConn(&buf, nil, false)
+
+	// Specify writeBufferSize smaller than message size to ensure that pooling
+	// works with fragmented messages.
+	wc := newConn(fakeNetConn{Writer: &buf}, true, 1024, len(message)-1, &pool, nil, nil)
 
 	if wc.writeBuf != nil {
 		t.Fatal("writeBuf not nil after create")
@@ -248,8 +253,6 @@ func TestWriteBufferPool(t *testing.T) {
 	}
 
 	writeBufAddr := &wc.writeBuf[0]
-
-	const message = "Hello World!"
 
 	if _, err := io.WriteString(w, message); err != nil {
 		t.Fatalf("io.WriteString(w, message) returned %v", err)
@@ -300,6 +303,7 @@ func TestWriteBufferPool(t *testing.T) {
 	}
 }
 
+// TestWriteBufferPoolSync ensures that *sync.Pool works as a buffer pool.
 func TestWriteBufferPoolSync(t *testing.T) {
 	var buf bytes.Buffer
 	var pool sync.Pool
@@ -318,6 +322,56 @@ func TestWriteBufferPoolSync(t *testing.T) {
 		if s := string(p); s != message {
 			t.Fatalf("message is %s, want %s", s, message)
 		}
+	}
+}
+
+// errorWriter is an io.Writer than returns an error on all writes.
+type errorWriter struct{}
+
+func (ew errorWriter) Write(p []byte) (int, error) { return 0, errors.New("Error!") }
+
+// TestWriteBufferPoolError ensures that buffer is returned to pool after error
+// on write.
+func TestWriteBufferPoolError(t *testing.T) {
+
+	// Part 1: Test NextWriter/Write/Close
+
+	var pool simpleBufferPool
+	wc := newConn(fakeNetConn{Writer: errorWriter{}}, true, 1024, 1024, &pool, nil, nil)
+
+	w, err := wc.NextWriter(TextMessage)
+	if err != nil {
+		t.Fatalf("wc.NextWriter() returned %v", err)
+	}
+
+	if wc.writeBuf == nil {
+		t.Fatal("writeBuf is nil after NextWriter")
+	}
+
+	writeBufAddr := &wc.writeBuf[0]
+
+	if _, err := io.WriteString(w, "Hello"); err != nil {
+		t.Fatalf("io.WriteString(w, message) returned %v", err)
+	}
+
+	if err := w.Close(); err == nil {
+		t.Fatalf("w.Close() did not return error")
+	}
+
+	if wpd, ok := pool.v.(writePoolData); !ok || len(wpd.buf) == 0 || &wpd.buf[0] != writeBufAddr {
+		t.Fatal("writeBuf not returned to pool")
+	}
+
+	// Part 2: Test WriteMessage
+
+	wc = newConn(fakeNetConn{Writer: errorWriter{}}, true, 1024, 1024, &pool, nil, nil)
+
+	if err := wc.WriteMessage(TextMessage, []byte("Hello")); err == nil {
+		t.Fatalf("wc.WriteMessage did not return error")
+	}
+
+	if wpd, ok := pool.v.(writePoolData); !ok || len(wpd.buf) == 0 || &wpd.buf[0] != writeBufAddr {
+		t.Fatal("writeBuf not returned to pool")
 	}
 }
 
