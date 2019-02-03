@@ -201,7 +201,12 @@ func (w *flateTakeoverWriteWrapper) Close() error {
 // modules for compression context takeover
 type (
 	contextTakeoverReaderFactory struct {
-		fr     io.ReadCloser
+		fr io.ReadCloser
+
+		// this window is used in compress/flate.decompressor.
+		// since there is no interface for updating the dictionary in the structure,
+		// window is rewritten with this structure.
+		// although there is a Reset(), it becomes initialization of a dictionary.
 		window []byte
 	}
 
