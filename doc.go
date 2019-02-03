@@ -171,7 +171,7 @@
 //
 //  conn.EnableWriteCompression(false)
 //
-// Currently this package support compression with "context takeover".
+// Currently this package supports compression with "context takeover".
 // This means that messages must be compressed and decompressed in isolation,
 // without retaining sliding window or dictionary state across messages. For
 // more details refer to RFC 7692.
