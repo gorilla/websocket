@@ -152,7 +152,7 @@
 // before calling the Upgrade function.
 //
 // Buffers
-// 
+//
 // Connections buffer network input and output to reduce the number the number
 // of system calls when reading or writing messages.
 //
@@ -160,7 +160,7 @@
 // Section 5 for a discussion of message framing. A WebSocket frame header is
 // written to the network each time a write buffer is flushed to the network.
 // Decreasing the size of the write buffer can increase the amount of framing
-// overhead on the connection. 
+// overhead on the connection.
 //
 // The buffer sizes in bytes are specified by the ReadBufferSize and
 // WriteBufferSize fields in the Dialer and Upgrader. The Dialer uses a default
