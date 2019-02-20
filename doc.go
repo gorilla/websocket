@@ -153,7 +153,7 @@
 //
 // Buffers
 //
-// Connections buffer network input and output to reduce the number the number
+// Connections buffer network input and output to reduce the number
 // of system calls when reading or writing messages.
 //
 // Write buffers are also used for constructing WebSocket frames. See RFC 6455,
