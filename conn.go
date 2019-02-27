@@ -89,16 +89,16 @@ var ErrCloseSent = errors.New("websocket: close sent")
 // read limit set for the connection.
 var ErrReadLimit = errors.New("websocket: read limit exceeded")
 
-// netError satisfies the net Error interface.
-type netError struct {
+// NetError satisfies the net Error interface.
+type NetError struct {
 	msg       string
 	temporary bool
 	timeout   bool
 }
 
-func (e *netError) Error() string   { return e.msg }
-func (e *netError) Temporary() bool { return e.temporary }
-func (e *netError) Timeout() bool   { return e.timeout }
+func (e *NetError) Error() string   { return e.msg }
+func (e *NetError) Temporary() bool { return e.temporary }
+func (e *NetError) Timeout() bool   { return e.timeout }
 
 // CloseError represents a close message.
 type CloseError struct {
@@ -173,7 +173,7 @@ func IsUnexpectedCloseError(err error, expectedCodes ...int) bool {
 }
 
 var (
-	errWriteTimeout        = &netError{msg: "websocket: write timeout", timeout: true, temporary: true}
+	errWriteTimeout        = &NetError{msg: "websocket: write timeout", timeout: true, temporary: true}
 	errUnexpectedEOF       = &CloseError{Code: CloseAbnormalClosure, Text: io.ErrUnexpectedEOF.Error()}
 	errBadWriteOpCode      = errors.New("websocket: bad write message type")
 	errWriteClosed         = errors.New("websocket: write closed")
@@ -187,7 +187,7 @@ func newMaskKey() [4]byte {
 
 func hideTempErr(err error) error {
 	if e, ok := err.(net.Error); ok && e.Temporary() {
-		err = &netError{msg: e.Error(), timeout: e.Timeout()}
+		err = &NetError{msg: e.Error(), timeout: e.Timeout()}
 	}
 	return err
 }
