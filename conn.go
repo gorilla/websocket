@@ -277,6 +277,8 @@ type Conn struct {
 
 	readDecompress         bool // whether last read frame had RSV1 set
 	newDecompressionReader func(io.Reader) io.ReadCloser
+
+	Unsafe bool // enable unsafe APIs
 }
 
 func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, writeBufferPool BufferPool, br *bufio.Reader, writeBuf []byte) *Conn {
@@ -841,7 +843,12 @@ func (c *Conn) advanceFrame() (int, error) {
 		if err != nil {
 			return noFrame, err
 		}
-		c.readRemaining = int64(binary.BigEndian.Uint64(p))
+		raw := binary.BigEndian.Uint64(p)
+		// rfc6455 says msb must be 0
+		if (raw & 0x8000000000000000) != 0 {
+			return noFrame, c.handleProtocolError("bad frame length")
+		}
+		c.readRemaining = int64(raw)
 	}
 
 	// 4. Handle frame masking.
@@ -1024,7 +1031,12 @@ func (r *messageReader) Close() error {
 
 // ReadMessage is a helper method for getting a reader using NextReader and
 // reading from that reader to a buffer.
+// NEVER USE THIS. An untrusted peer could send an explosively compressed message. A megabyte of zeros can compress down to about 1kB. Always use NextReader() and kill the connection if you read too long a message.
+// ReadMessage() will error out immediately unless Conn.Unsafe is true.
 func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
+	if !c.Unsafe {
+		return noFrame, nil, errors.New("websocket: ReadMessage is not safe but Conn.Unsafe is not set")
+	}
 	var r io.Reader
 	messageType, r, err = c.NextReader()
 	if err != nil {
