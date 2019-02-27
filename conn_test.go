@@ -239,6 +239,7 @@ func TestWriteBufferPool(t *testing.T) {
 		t.Fatal("writeBuf not returned to pool")
 	}
 
+	rc.Unsafe = true
 	opCode, p, err := rc.ReadMessage()
 	if opCode != TextMessage || err != nil {
 		t.Fatalf("ReadMessage() returned %d, p, %v", opCode, err)
@@ -284,6 +285,7 @@ func TestWriteBufferPoolSync(t *testing.T) {
 		if err := wc.WriteMessage(TextMessage, []byte(message)); err != nil {
 			t.Fatalf("wc.WriteMessage() returned %v", err)
 		}
+		rc.Unsafe = true
 		opCode, p, err := rc.ReadMessage()
 		if opCode != TextMessage || err != nil {
 			t.Fatalf("ReadMessage() returned %d, p, %v", opCode, err)
@@ -621,6 +623,7 @@ func (r failingReader) Read(p []byte) (int, error) {
 
 func TestFailedConnectionReadPanic(t *testing.T) {
 	c := newTestConn(failingReader{}, nil, false)
+	c.Unsafe = true
 
 	defer func() {
 		if v := recover(); v != nil {

@@ -138,6 +138,7 @@ func sendRecv(t *testing.T, ws *Conn) {
 	if err := ws.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
 		t.Fatalf("SetReadDeadline: %v", err)
 	}
+	ws.Unsafe = true
 	_, p, err := ws.ReadMessage()
 	if err != nil {
 		t.Fatalf("ReadMessage: %v", err)

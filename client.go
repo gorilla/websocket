@@ -360,18 +360,21 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		return nil, resp, ErrBadHandshake
 	}
 
-	for _, ext := range parseExtensions(resp.Header) {
-		if ext[""] != "permessage-deflate" {
-			continue
+	if d.EnableCompression {
+		// if we want compression and the other side does too, enable it
+		for _, ext := range parseExtensions(resp.Header) {
+			if ext[""] != "permessage-deflate" {
+				continue
+			}
+			_, snct := ext["server_no_context_takeover"]
+			_, cnct := ext["client_no_context_takeover"]
+			if !snct || !cnct {
+				return nil, resp, errInvalidCompression
+			}
+			conn.newCompressionWriter = compressNoContextTakeover
+			conn.newDecompressionReader = decompressNoContextTakeover
+			break
 		}
-		_, snct := ext["server_no_context_takeover"]
-		_, cnct := ext["client_no_context_takeover"]
-		if !snct || !cnct {
-			return nil, resp, errInvalidCompression
-		}
-		conn.newCompressionWriter = compressNoContextTakeover
-		conn.newDecompressionReader = decompressNoContextTakeover
-		break
 	}
 
 	resp.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
