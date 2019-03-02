@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net"
-	"reflect"
 	"strconv"
 	"sync"
 	"time"
@@ -243,6 +242,7 @@ type Conn struct {
 	conn        net.Conn
 	isServer    bool
 	subprotocol string
+	isClosed    chan bool
 
 	// Write fields
 	mu            chan bool // used as mutex to protect write to conn
@@ -326,53 +326,32 @@ func (c *Conn) Subprotocol() string {
 	return c.subprotocol
 }
 
-// Close sends close frame and waits for one in response
-// it expects two args. `closeCode int` and `closeMessage string` in order
-// it uses variadic args to maintain backwards compatibility
-func (c *Conn) Close(args ...interface{}) error {
-	closeCode := CloseNoStatusReceived
-	message := ""
-	ok := false
-	if len(args) == 2 {
-		closeCode, ok = args[0].(int)
-		if !ok {
-			closeCode = CloseNoStatusReceived
-		}
-		message, ok = args[1].(string)
-		if !ok {
-			message = ""
-		}
-	}
-	err := c.Shutdown(closeCode, message)
-	if err != nil {
-		return err
-	}
-	c.conn.Close()
-	return nil
+// Close closes the underlying network connection without sending or waiting
+// for a close message.
+func (c *Conn) Close() error {
+	return c.conn.Close()
 }
 
-// Shutdown sends a close frame and waits for one in response
-func (c *Conn) Shutdown(closeCode int, closeMessage string) error {
+
+// Shutdown sends a close frame to the peer and waits for close frame in resopnse.
+// Shutdown assumes that the application is reading the connection in another
+// goroutine and hence it does not try to read close frame itself
+func (c *Conn) Shutdown(closeCode int, closeMessage string, timeout time.Duration) error {
 	if !isValidCloseCode(closeCode) {
 		// we do not shutdown connection
 		return errors.New("invalid close code received")
 	}
 	if !utf8.ValidString(closeMessage) {
-		return  errors.New("invalid utf8 payload for shutdown message")
+		return errors.New("invalid utf8 payload for shutdown message")
 	}
+
 	message := FormatCloseMessage(closeCode, closeMessage)
-	err := c.WriteControl(CloseMessage, message, time.Now().Add(writeWait))
-	if err != nil {
-		return err
+	c.WriteControl(CloseMessage, message, time.Now().Add(writeWait))
+	select {
+	case <-time.After(timeout): 							// if nothing happens and we timeout
+	case <-c.isClosed:          							// if existing reader encounters close frame
 	}
-	timeStart := time.Now()
-	c.conn.SetReadDeadline(time.Now().Add(time.Minute))
-	for _, _, err := c.ReadMessage(); reflect.TypeOf(err) != reflect.TypeOf(&CloseError{}) ; {
-		if timeStart.Sub(time.Now()) > time.Minute {
-			break
-		}
-	}
-	return nil
+	return c.Close()
 }
 
 // LocalAddr returns the local network address.
@@ -943,6 +922,7 @@ func (c *Conn) advanceFrame() (int, error) {
 			return noFrame, err
 		}
 	case CloseMessage:
+		c.isClosed <- true
 		closeCode := CloseNoStatusReceived
 		closeText := ""
 		if len(payload) >= 2 {
