@@ -870,15 +870,13 @@ func (c *Conn) advanceFrame() (int, error) {
 
 	if frameType == continuationFrame || frameType == TextMessage || frameType == BinaryMessage {
 
-		if c.readLimit > 0 && c.readRemaining > c.readLimit {
-			// This one read would be too long.
-			// Don't delete this case. We want some
-			// protection against readLength overflowing
-			// while adding readRemaining to it.
+		newReadLength := c.readLength + c.readRemaining
+		if newReadLength < c.readLength {
+			// overflow!
 			c.WriteControl(CloseMessage, FormatCloseMessage(CloseMessageTooBig, ""), time.Now().Add(writeWait))
 			return noFrame, ErrReadLimit
 		}
-		c.readLength += c.readRemaining
+		c.readLength = newReadLength
 		if c.readLimit > 0 && c.readLength > c.readLimit {
 			c.WriteControl(CloseMessage, FormatCloseMessage(CloseMessageTooBig, ""), time.Now().Add(writeWait))
 			return noFrame, ErrReadLimit
