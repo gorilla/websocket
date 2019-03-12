@@ -870,7 +870,13 @@ func (c *Conn) advanceFrame() (int, error) {
 
 	if frameType == continuationFrame || frameType == TextMessage || frameType == BinaryMessage {
 
-		c.readLength += c.readRemaining
+		newReadLength := c.readLength + c.readRemaining
+		if newReadLength < c.readLength {
+			// overflow!
+			c.WriteControl(CloseMessage, FormatCloseMessage(CloseMessageTooBig, ""), time.Now().Add(writeWait))
+			return noFrame, ErrReadLimit
+		}
+		c.readLength = newReadLength
 		if c.readLimit > 0 && c.readLength > c.readLimit {
 			c.WriteControl(CloseMessage, FormatCloseMessage(CloseMessageTooBig, ""), time.Now().Add(writeWait))
 			return noFrame, ErrReadLimit
