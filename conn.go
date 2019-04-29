@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -237,6 +238,8 @@ type BufferPool interface {
 // added to the pool.
 type writePoolData struct{ buf []byte }
 
+const writeTimeout = time.Millisecond
+
 // The Conn type represents a WebSocket connection.
 type Conn struct {
 	conn        net.Conn
@@ -263,6 +266,10 @@ type Conn struct {
 	reader        io.ReadCloser // the current reader returned to the application
 	readErr       error
 	br            *bufio.Reader
+	bw            *bufio.Writer
+	bwTimeout     *time.Timer
+	bwLock        sync.Mutex
+	bwCond        sync.Cond
 	readRemaining int64 // bytes remaining in current frame.
 	readFinal     bool  // true the current message has more frames.
 	readLength    int64 // Message size.
@@ -281,7 +288,7 @@ type Conn struct {
 	Unsafe bool // enable unsafe APIs
 }
 
-func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, writeBufferPool BufferPool, br *bufio.Reader, writeBuf []byte) *Conn {
+func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, writeBufferPool BufferPool, br *bufio.Reader, bw *bufio.Writer, writeBuf []byte) *Conn {
 
 	if br == nil {
 		if readBufferSize == 0 {
@@ -307,6 +314,7 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, 
 	c := &Conn{
 		isServer:               isServer,
 		br:                     br,
+		bw:                     bw,
 		conn:                   conn,
 		mu:                     mu,
 		readFinal:              true,
@@ -330,7 +338,12 @@ func (c *Conn) Subprotocol() string {
 // Close closes the underlying network connection without sending or waiting
 // for a close message.
 func (c *Conn) Close() error {
-	return c.conn.Close()
+	err := c.conn.Close()
+	c.conn = nil
+	if c.bw != nil {
+		c.bwCond.Signal()
+	}
+	return err
 }
 
 // LocalAddr returns the local network address.
@@ -375,11 +388,32 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 		return err
 	}
 
-	c.conn.SetWriteDeadline(deadline)
-	if len(buf1) == 0 {
-		_, err = c.conn.Write(buf0)
+	//fmt.Printf("write wat conn %v bw %v\n", c.conn, c.bw)
+	var out io.Writer = nil
+	if c.bw == nil {
+		//fmt.Printf("write to conn")
+		out = c.conn
+		c.conn.SetWriteDeadline(deadline)
 	} else {
-		err = c.writeBufs(buf0, buf1)
+		out = c.bw
+		//fmt.Printf("write to bw %v %#v\n", out, out)
+		if c.bwTimeout == nil {
+			c.bwTimeout = time.NewTimer(writeTimeout)
+			c.bwCond.L = &c.bwLock
+			go c.flushThread()
+		} else {
+			c.bwTimeout.Reset(writeTimeout)
+			c.bwCond.Signal()
+		}
+	}
+	if out == nil {
+		panic(fmt.Sprintf("c.bw=%v c.conn=%v", c.bw, c.conn))
+	}
+	if len(buf0) != 0 {
+		_, err = out.Write(buf0)
+	}
+	if err == nil && len(buf1) != 0 {
+		_, err = out.Write(buf1)
 	}
 	if err != nil {
 		return c.writeFatal(err)
@@ -388,6 +422,29 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 		c.writeFatal(ErrCloseSent)
 	}
 	return nil
+}
+
+func (c *Conn) flushThread() {
+	for true {
+		c.bwLock.Lock()
+		c.bwCond.Wait()
+		c.bwLock.Unlock()
+		if c.conn == nil {
+			return
+		}
+		select {
+		case <-c.bwTimeout.C:
+			err := c.bw.Flush()
+			if err != nil {
+				c.writeErrMu.Lock()
+				if c.writeErr != nil {
+					c.writeErr = err
+				}
+				c.writeErrMu.Unlock()
+			}
+			// TODO: quit channel
+		}
+	}
 }
 
 // WriteControl writes a control message with the given deadline. The allowed

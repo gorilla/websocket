@@ -51,7 +51,7 @@ func (a fakeAddr) String() string {
 // newTestConn creates a connnection backed by a fake network connection using
 // default values for buffering.
 func newTestConn(r io.Reader, w io.Writer, isServer bool) *Conn {
-	return newConn(fakeNetConn{Reader: r, Writer: w}, isServer, 1024, 1024, nil, nil, nil)
+	return newConn(fakeNetConn{Reader: r, Writer: w}, isServer, 1024, 1024, nil, nil, nil, nil)
 }
 
 func TestFraming(t *testing.T) {
@@ -204,7 +204,7 @@ func TestWriteBufferPool(t *testing.T) {
 
 	// Specify writeBufferSize smaller than message size to ensure that pooling
 	// works with fragmented messages.
-	wc := newConn(fakeNetConn{Writer: &buf}, true, 1024, len(message)-1, &pool, nil, nil)
+	wc := newConn(fakeNetConn{Writer: &buf}, true, 1024, len(message)-1, &pool, nil, nil, nil)
 
 	if wc.writeBuf != nil {
 		t.Fatal("writeBuf not nil after create")
@@ -277,7 +277,7 @@ func TestWriteBufferPool(t *testing.T) {
 func TestWriteBufferPoolSync(t *testing.T) {
 	var buf bytes.Buffer
 	var pool sync.Pool
-	wc := newConn(fakeNetConn{Writer: &buf}, true, 1024, 1024, &pool, nil, nil)
+	wc := newConn(fakeNetConn{Writer: &buf}, true, 1024, 1024, &pool, nil, nil, nil)
 	rc := newTestConn(&buf, nil, false)
 
 	const message = "Hello World!"
@@ -308,7 +308,7 @@ func TestWriteBufferPoolError(t *testing.T) {
 	// Part 1: Test NextWriter/Write/Close
 
 	var pool simpleBufferPool
-	wc := newConn(fakeNetConn{Writer: errorWriter{}}, true, 1024, 1024, &pool, nil, nil)
+	wc := newConn(fakeNetConn{Writer: errorWriter{}}, true, 1024, 1024, &pool, nil, nil, nil)
 
 	w, err := wc.NextWriter(TextMessage)
 	if err != nil {
@@ -335,7 +335,7 @@ func TestWriteBufferPoolError(t *testing.T) {
 
 	// Part 2: Test WriteMessage
 
-	wc = newConn(fakeNetConn{Writer: errorWriter{}}, true, 1024, 1024, &pool, nil, nil)
+	wc = newConn(fakeNetConn{Writer: errorWriter{}}, true, 1024, 1024, &pool, nil, nil, nil)
 
 	if err := wc.WriteMessage(TextMessage, []byte("Hello")); err == nil {
 		t.Fatalf("wc.WriteMessage did not return error")
@@ -352,7 +352,7 @@ func TestCloseFrameBeforeFinalMessageFrame(t *testing.T) {
 	expectedErr := &CloseError{Code: CloseNormalClosure, Text: "hello"}
 
 	var b1, b2 bytes.Buffer
-	wc := newConn(&fakeNetConn{Reader: nil, Writer: &b1}, false, 1024, bufSize, nil, nil, nil)
+	wc := newConn(&fakeNetConn{Reader: nil, Writer: &b1}, false, 1024, bufSize, nil, nil, nil, nil)
 	rc := newTestConn(&b1, &b2, true)
 
 	w, _ := wc.NextWriter(BinaryMessage)
@@ -413,7 +413,7 @@ func TestEOFBeforeFinalFrame(t *testing.T) {
 	const bufSize = 512
 
 	var b1, b2 bytes.Buffer
-	wc := newConn(&fakeNetConn{Writer: &b1}, false, 1024, bufSize, nil, nil, nil)
+	wc := newConn(&fakeNetConn{Writer: &b1}, false, 1024, bufSize, nil, nil, nil, nil)
 	rc := newTestConn(&b1, &b2, true)
 
 	w, _ := wc.NextWriter(BinaryMessage)
@@ -465,7 +465,7 @@ func TestReadLimit(t *testing.T) {
 	message := make([]byte, readLimit+1)
 
 	var b1, b2 bytes.Buffer
-	wc := newConn(&fakeNetConn{Writer: &b1}, false, 1024, readLimit-2, nil, nil, nil)
+	wc := newConn(&fakeNetConn{Writer: &b1}, false, 1024, readLimit-2, nil, nil, nil, nil)
 	rc := newTestConn(&b1, &b2, true)
 	rc.SetReadLimit(readLimit)
 
@@ -506,7 +506,7 @@ func TestAddrs(t *testing.T) {
 func TestUnderlyingConn(t *testing.T) {
 	var b1, b2 bytes.Buffer
 	fc := fakeNetConn{Reader: &b1, Writer: &b2}
-	c := newConn(fc, true, 1024, 1024, nil, nil, nil)
+	c := newConn(fc, true, 1024, 1024, nil, nil, nil, nil)
 	ul := c.UnderlyingConn()
 	if ul != fc {
 		t.Fatalf("Underlying conn is not what it should be.")
@@ -520,8 +520,8 @@ func TestBufioReadBytes(t *testing.T) {
 	m[len(m)-1] = '\n'
 
 	var b1, b2 bytes.Buffer
-	wc := newConn(fakeNetConn{Writer: &b1}, false, len(m)+64, len(m)+64, nil, nil, nil)
-	rc := newConn(fakeNetConn{Reader: &b1, Writer: &b2}, true, len(m)-64, len(m)-64, nil, nil, nil)
+	wc := newConn(fakeNetConn{Writer: &b1}, false, len(m)+64, len(m)+64, nil, nil, nil, nil)
+	rc := newConn(fakeNetConn{Reader: &b1, Writer: &b2}, true, len(m)-64, len(m)-64, nil, nil, nil, nil)
 
 	w, _ := wc.NextWriter(BinaryMessage)
 	w.Write(m)
@@ -635,4 +635,49 @@ func TestFailedConnectionReadPanic(t *testing.T) {
 		c.ReadMessage()
 	}
 	t.Fatal("should not get here")
+}
+
+func TestReadMaliciousPackets(t *testing.T) {
+	const readLimit = 2
+
+	var b1, b2 bytes.Buffer
+	rc := newTestConn(&b1, &b2, true)
+	rc.SetReadLimit(readLimit)
+
+	// First, send a non-final binary message
+	b1.Write([]byte("\x01\x81"))
+
+	// Mask key
+	b1.Write([]byte("\x00\x00\x00\x00"))
+
+	// First payload
+	b1.Write([]byte{65})
+
+	// Next, send a negative-length, non-final continuation frame
+	b1.Write([]byte("\x00\xFF\x80\x00\x00\x00\x00\x00\x00\x00"))
+
+	// Mask key
+	b1.Write([]byte("\x00\x00\x00\x00"))
+
+	// Next, send a too long, final continuation frame
+	b1.Write([]byte("\x80\xFF\x00\x00\x00\x00\x00\x00\x00\x05"))
+
+	// Mask key
+	b1.Write([]byte("\x00\x00\x00\x00"))
+
+	// Too-long payload
+	b1.Write([]byte("BCDEF"))
+
+	op, r, err := rc.NextReader()
+	if err != nil {
+		t.Fatalf("1: NextReader() returned %d, %v", op, err)
+	}
+	var buf [10]byte
+	n, err := r.Read(buf[:])
+	t.Logf("Read: %d, err: %v, %v\n", n, err, buf)
+	n, err = r.Read(buf[:])
+	t.Logf("Read: %d, err: %v, %v\n", n, err, buf)
+	if err == nil {
+		t.FailNow()
+	}
 }
