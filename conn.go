@@ -345,6 +345,7 @@ func (c *Conn) Close() error {
 	c.conn = nil
 	if c.bw != nil {
 		c.bwCond.Signal()
+		c.bw = nil
 	}
 	return err
 }
