@@ -113,10 +113,12 @@ func (t cstHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		t.Logf("NextWriter: %v", err)
 		return
 	}
-	if _, err = io.Copy(wr, rd); err != nil {
+	var written int64
+	if written, err = io.Copy(wr, rd); err != nil {
 		t.Logf("NextWriter: %v", err)
 		return
 	}
+	t.Logf("server copied %d bytes", written)
 	if err := wr.Close(); err != nil {
 		t.Logf("Close: %v", err)
 		return

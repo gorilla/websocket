@@ -90,6 +90,7 @@ var bufioReuseTests = []struct {
 }
 
 func TestBufioReuse(t *testing.T) {
+	t.Skip("buffer stealing deprecated")
 	for i, tt := range bufioReuseTests {
 		br := bufio.NewReaderSize(strings.NewReader(""), tt.n)
 		bw := bufio.NewWriterSize(&bytes.Buffer{}, tt.n)

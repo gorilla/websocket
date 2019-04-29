@@ -338,6 +338,9 @@ func (c *Conn) Subprotocol() string {
 // Close closes the underlying network connection without sending or waiting
 // for a close message.
 func (c *Conn) Close() error {
+	if c.bw != nil {
+		c.bw.Flush()
+	}
 	err := c.conn.Close()
 	c.conn = nil
 	if c.bw != nil {
