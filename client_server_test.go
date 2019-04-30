@@ -906,3 +906,87 @@ func TestEmptyTracingDialWithContext(t *testing.T) {
 	defer ws.Close()
 	sendRecv(t, ws)
 }
+
+const msgSize = 150
+
+type manySmallMessageServer struct {
+	b *testing.B
+	*httptest.Server
+	URL string
+}
+
+type msmHandler struct {
+	*testing.B
+}
+
+func (b msmHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/msm" {
+		b.Errorf("bad path %v", r.URL.Path)
+		http.Error(w, "bad path", http.StatusBadRequest)
+		return
+	}
+	ws, err := cstUpgrader.Upgrade(w, r, http.Header{"Set-Cookie": {"sessionID=1234"}})
+	if err != nil {
+		b.Errorf("Upgrade: %v", err)
+		return
+	}
+
+	for true {
+		op, rd, err := ws.NextReader()
+		if err != nil {
+			b.Errorf("NextReader: %v", err)
+			return
+		}
+		wr, err := ws.NextWriter(op)
+		if err != nil {
+			b.Errorf("NextWriter: %v", err)
+			return
+		}
+	}
+}
+
+func bytesInc(b []byte) {
+	pos := len(b) - 1
+	for pos >= 0 {
+		c := b[pos] + 1
+		b[pos] = c
+		if c == 0 {
+			pos--
+		} else {
+			return
+		}
+	}
+}
+
+func BenchmarkManySmallMessages(b *testing.B) {
+	s := manySmallMessageServer{}
+	s.b = b
+	s.Server = httptest.NewServer(msmHandler{b})
+	s.Server.URL += "/msm"
+	s.URL = "ws" + strings.TrimPrefix(s.Server.URL, "http")
+
+	defer s.Server.Close()
+
+	ws, _, err := cstDialer.Dial(s.URL, nil)
+	if err != nil {
+		b.Fatalf("Dial: %v", err)
+	}
+	defer ws.Close()
+
+	quit := make(chan struct{})
+	go func() {
+		for i := 0; i < b.N; i++ {
+			mtype, reader, err := wp.conn.NextReader()
+		}
+	}()
+
+	msg := make([]byte, msgSize)
+	for i := 0; i < b.N; i++ {
+		err = ws.WriteMessage(BinaryMessage, msg)
+		if err != nil {
+			b.Errorf("client WriteMessage %v", err)
+			return
+		}
+	}
+
+}
