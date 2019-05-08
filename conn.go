@@ -324,6 +324,9 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, 
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
 	}
+	c.bwTimeout = time.NewTimer(writeTimeout)
+	c.bwCond.L = &c.bwLock
+	go c.flushThread()
 	c.SetCloseHandler(nil)
 	c.SetPingHandler(nil)
 	c.SetPongHandler(nil)
@@ -339,14 +342,13 @@ func (c *Conn) Subprotocol() string {
 // for a close message.
 func (c *Conn) Close() error {
 	if c.bw != nil {
+		c.bwLock.Lock()
+		defer c.bwLock.Unlock()
 		c.bw.Flush()
+		c.bw = nil
+		c.bwCond.Signal()
 	}
 	err := c.conn.Close()
-	c.conn = nil
-	if c.bw != nil {
-		c.bwCond.Signal()
-		c.bw = nil
-	}
 	return err
 }
 
@@ -393,22 +395,18 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 	}
 
 	//fmt.Printf("write wat conn %v bw %v\n", c.conn, c.bw)
-	var out io.Writer = nil
+	var out io.Writer
 	if c.bw == nil {
 		//fmt.Printf("write to conn")
 		out = c.conn
 		c.conn.SetWriteDeadline(deadline)
 	} else {
+		c.bwLock.Lock()
+		defer c.bwLock.Unlock()
 		out = c.bw
 		//fmt.Printf("write to bw %v %#v\n", out, out)
-		if c.bwTimeout == nil {
-			c.bwTimeout = time.NewTimer(writeTimeout)
-			c.bwCond.L = &c.bwLock
-			go c.flushThread()
-		} else {
-			c.bwTimeout.Reset(writeTimeout)
-			c.bwCond.Signal()
-		}
+		c.bwTimeout.Reset(writeTimeout)
+		c.bwCond.Signal()
 	}
 	if out == nil {
 		panic(fmt.Sprintf("c.bw=%v c.conn=%v", c.bw, c.conn))
@@ -429,15 +427,21 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 }
 
 func (c *Conn) flushThread() {
+	c.bwLock.Lock()
 	for true {
-		c.bwLock.Lock()
 		c.bwCond.Wait()
-		c.bwLock.Unlock()
-		if c.conn == nil {
+		if c.bw == nil {
+			c.bwLock.Unlock()
 			return
 		}
+		c.bwLock.Unlock()
 		select {
 		case <-c.bwTimeout.C:
+			c.bwLock.Lock()
+			if c.bw == nil {
+				c.bwLock.Unlock()
+				return
+			}
 			err := c.bw.Flush()
 			if err != nil {
 				c.writeErrMu.Lock()
