@@ -267,7 +267,8 @@ type Conn struct {
 	readErr       error
 	br            *bufio.Reader
 	bw            *bufio.Writer
-	bwTimeout     *time.Timer
+	bwFlushSkip   int
+	bwTimeout     *time.Ticker
 	bwLock        sync.Mutex
 	bwCond        sync.Cond
 	readRemaining int64 // bytes remaining in current frame.
@@ -324,7 +325,7 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, 
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
 	}
-	c.bwTimeout = time.NewTimer(writeTimeout)
+	c.bwTimeout = time.NewTicker(writeTimeout)
 	c.bwCond.L = &c.bwLock
 	go c.flushThread()
 	c.SetCloseHandler(nil)
@@ -405,7 +406,8 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 		defer c.bwLock.Unlock()
 		out = c.bw
 		//fmt.Printf("write to bw %v %#v\n", out, out)
-		c.bwTimeout.Reset(writeTimeout)
+		//c.bwTimeout.Reset(writeTimeout)
+		c.bwFlushSkip = 1
 		c.bwCond.Signal()
 	}
 	if out == nil {
@@ -441,6 +443,11 @@ func (c *Conn) flushThread() {
 			if c.bw == nil {
 				c.bwLock.Unlock()
 				return
+			}
+			if c.bwFlushSkip == 1 {
+				// ticker goes all the time, wait at least 1 period before Flush
+				c.bwFlushSkip = 0
+				continue
 			}
 			err := c.bw.Flush()
 			if err != nil {
