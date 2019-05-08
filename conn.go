@@ -436,6 +436,7 @@ func (c *Conn) flushThread() {
 			c.bwLock.Unlock()
 			return
 		}
+	nowait:
 		c.bwLock.Unlock()
 		select {
 		case <-c.bwTimeout.C:
@@ -447,7 +448,7 @@ func (c *Conn) flushThread() {
 			if c.bwFlushSkip == 1 {
 				// ticker goes all the time, wait at least 1 period before Flush
 				c.bwFlushSkip = 0
-				continue
+				goto nowait
 			}
 			err := c.bw.Flush()
 			if err != nil {
