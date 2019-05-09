@@ -191,15 +191,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		br = brw.Reader
 	}
 
-	buf := bufioWriterBuffer(netConn, brw.Writer)
-
-	var writeBuf []byte
-	if u.WriteBufferPool == nil && u.WriteBufferSize == 0 && len(buf) >= maxFrameHeaderSize+256 {
-		// Reuse hijacked write buffer as connection buffer.
-		writeBuf = buf
-	}
-
-	c := newConn(netConn, true, u.ReadBufferSize, u.WriteBufferSize, u.WriteBufferPool, br, writeBuf)
+	c := newConn(netConn, true, u.ReadBufferSize, u.WriteBufferSize, u.WriteBufferPool, br, brw.Writer, nil)
 	c.subprotocol = subprotocol
 
 	if compress {
@@ -207,11 +199,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		c.newDecompressionReader = decompressNoContextTakeover
 	}
 
-	// Use larger of hijacked buffer and connection write buffer for header.
-	p := buf
-	if len(c.writeBuf) > len(p) {
-		p = c.writeBuf
-	}
+	p := c.writeBuf
 	p = p[:0]
 
 	p = append(p, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "...)

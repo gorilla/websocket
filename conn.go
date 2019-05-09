@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -237,6 +238,8 @@ type BufferPool interface {
 // added to the pool.
 type writePoolData struct{ buf []byte }
 
+const writeTimeout = time.Millisecond
+
 // The Conn type represents a WebSocket connection.
 type Conn struct {
 	conn        net.Conn
@@ -263,6 +266,11 @@ type Conn struct {
 	reader        io.ReadCloser // the current reader returned to the application
 	readErr       error
 	br            *bufio.Reader
+	bw            *bufio.Writer
+	bwFlushSkip   int
+	bwTimeout     *time.Ticker
+	bwLock        sync.Mutex
+	bwCond        sync.Cond
 	readRemaining int64 // bytes remaining in current frame.
 	readFinal     bool  // true the current message has more frames.
 	readLength    int64 // Message size.
@@ -281,7 +289,7 @@ type Conn struct {
 	Unsafe bool // enable unsafe APIs
 }
 
-func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, writeBufferPool BufferPool, br *bufio.Reader, writeBuf []byte) *Conn {
+func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, writeBufferPool BufferPool, br *bufio.Reader, bw *bufio.Writer, writeBuf []byte) *Conn {
 
 	if br == nil {
 		if readBufferSize == 0 {
@@ -307,6 +315,7 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, 
 	c := &Conn{
 		isServer:               isServer,
 		br:                     br,
+		bw:                     bw,
 		conn:                   conn,
 		mu:                     mu,
 		readFinal:              true,
@@ -316,6 +325,9 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, 
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
 	}
+	c.bwTimeout = time.NewTicker(writeTimeout)
+	c.bwCond.L = &c.bwLock
+	go c.flushThread()
 	c.SetCloseHandler(nil)
 	c.SetPingHandler(nil)
 	c.SetPongHandler(nil)
@@ -330,7 +342,15 @@ func (c *Conn) Subprotocol() string {
 // Close closes the underlying network connection without sending or waiting
 // for a close message.
 func (c *Conn) Close() error {
-	return c.conn.Close()
+	if c.bw != nil {
+		c.bwLock.Lock()
+		defer c.bwLock.Unlock()
+		c.bw.Flush()
+		c.bw = nil
+		c.bwCond.Signal()
+	}
+	err := c.conn.Close()
+	return err
 }
 
 // LocalAddr returns the local network address.
@@ -375,11 +395,25 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 		return err
 	}
 
-	c.conn.SetWriteDeadline(deadline)
-	if len(buf1) == 0 {
-		_, err = c.conn.Write(buf0)
+	var out io.Writer
+	if c.bw == nil {
+		out = c.conn
+		c.conn.SetWriteDeadline(deadline)
 	} else {
-		err = c.writeBufs(buf0, buf1)
+		c.bwLock.Lock()
+		defer c.bwLock.Unlock()
+		out = c.bw
+		c.bwFlushSkip = 1
+		c.bwCond.Signal()
+	}
+	if out == nil {
+		panic(fmt.Sprintf("c.bw=%v c.conn=%v", c.bw, c.conn))
+	}
+	if len(buf0) != 0 {
+		_, err = out.Write(buf0)
+	}
+	if err == nil && len(buf1) != 0 {
+		_, err = out.Write(buf1)
 	}
 	if err != nil {
 		return c.writeFatal(err)
@@ -388,6 +422,41 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 		c.writeFatal(ErrCloseSent)
 	}
 	return nil
+}
+
+func (c *Conn) flushThread() {
+	c.bwLock.Lock()
+	for true {
+		c.bwCond.Wait()
+		if c.bw == nil {
+			c.bwLock.Unlock()
+			return
+		}
+	nowait:
+		c.bwLock.Unlock()
+		select {
+		case <-c.bwTimeout.C:
+			c.bwLock.Lock()
+			if c.bw == nil {
+				c.bwLock.Unlock()
+				return
+			}
+			if c.bwFlushSkip == 1 {
+				// ticker goes all the time, wait at least 1 period before Flush
+				c.bwFlushSkip = 0
+				goto nowait
+			}
+			c.conn.SetWriteDeadline(c.writeDeadline)
+			err := c.bw.Flush()
+			if err != nil {
+				c.writeErrMu.Lock()
+				if c.writeErr != nil {
+					c.writeErr = err
+				}
+				c.writeErrMu.Unlock()
+			}
+		}
+	}
 }
 
 // WriteControl writes a control message with the given deadline. The allowed
