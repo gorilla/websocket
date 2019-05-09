@@ -395,18 +395,14 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 		return err
 	}
 
-	//fmt.Printf("write wat conn %v bw %v\n", c.conn, c.bw)
 	var out io.Writer
 	if c.bw == nil {
-		//fmt.Printf("write to conn")
 		out = c.conn
 		c.conn.SetWriteDeadline(deadline)
 	} else {
 		c.bwLock.Lock()
 		defer c.bwLock.Unlock()
 		out = c.bw
-		//fmt.Printf("write to bw %v %#v\n", out, out)
-		//c.bwTimeout.Reset(writeTimeout)
 		c.bwFlushSkip = 1
 		c.bwCond.Signal()
 	}
@@ -458,7 +454,6 @@ func (c *Conn) flushThread() {
 				}
 				c.writeErrMu.Unlock()
 			}
-			// TODO: quit channel
 		}
 	}
 }
