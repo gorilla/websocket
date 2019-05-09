@@ -395,10 +395,10 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 		return err
 	}
 
-	c.conn.SetWriteDeadline(deadline)
 	var out io.Writer
 	if c.bw == nil {
 		out = c.conn
+		c.conn.SetWriteDeadline(deadline)
 	} else {
 		c.bwLock.Lock()
 		defer c.bwLock.Unlock()
@@ -446,6 +446,7 @@ func (c *Conn) flushThread() {
 				c.bwFlushSkip = 0
 				goto nowait
 			}
+			c.conn.SetWriteDeadline(c.writeDeadline)
 			err := c.bw.Flush()
 			if err != nil {
 				c.writeErrMu.Lock()
