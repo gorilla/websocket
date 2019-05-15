@@ -402,6 +402,9 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 	} else {
 		c.bwLock.Lock()
 		defer c.bwLock.Unlock()
+		if c.bw == nil {
+			return errors.New("websocket: writing to closed connection")
+		}
 		out = c.bw
 		c.bwFlushSkip = 1
 		c.bwCond.Signal()
