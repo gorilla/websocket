@@ -267,6 +267,7 @@ type Conn struct {
 	readErr       error
 	br            *bufio.Reader
 	bw            *bufio.Writer
+	bwPresent     bool
 	bwFlushSkip   int
 	bwTimeout     *time.Ticker
 	bwLock        sync.Mutex
@@ -316,6 +317,7 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, 
 		isServer:               isServer,
 		br:                     br,
 		bw:                     bw,
+		bwPresent:              bw != nil,
 		conn:                   conn,
 		mu:                     mu,
 		readFinal:              true,
@@ -342,11 +344,13 @@ func (c *Conn) Subprotocol() string {
 // Close closes the underlying network connection without sending or waiting
 // for a close message.
 func (c *Conn) Close() error {
-	if c.bw != nil {
+	if c.bwPresent {
 		c.bwLock.Lock()
 		defer c.bwLock.Unlock()
-		c.bw.Flush()
-		c.bw = nil
+		if c.bw != nil {
+			c.bw.Flush()
+			c.bw = nil
+		}
 		c.bwCond.Signal()
 	}
 	err := c.conn.Close()
@@ -396,7 +400,7 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 	}
 
 	var out io.Writer
-	if c.bw == nil {
+	if !c.bwPresent {
 		out = c.conn
 		c.conn.SetWriteDeadline(deadline)
 	} else {
