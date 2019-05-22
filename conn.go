@@ -269,7 +269,6 @@ type Conn struct {
 	bw            *bufio.Writer
 	bwPresent     bool
 	bwFlushSkip   int
-	bwTimeout     *time.Ticker
 	bwLock        sync.Mutex
 	bwCond        sync.Cond
 	readRemaining int64 // bytes remaining in current frame.
@@ -327,7 +326,6 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, 
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
 	}
-	c.bwTimeout = time.NewTicker(writeTimeout)
 	c.bwCond.L = &c.bwLock
 	go c.flushThread()
 	c.SetCloseHandler(nil)
@@ -432,20 +430,23 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 }
 
 func (c *Conn) flushThread() {
+	bwTimeout := time.NewTicker(writeTimeout)
+	defer bwTimeout.Stop()
+
 	c.bwLock.Lock()
+	defer c.bwLock.Unlock()
+
 	for true {
 		c.bwCond.Wait()
 		if c.bw == nil {
-			c.bwLock.Unlock()
 			return
 		}
 	nowait:
 		c.bwLock.Unlock()
 		select {
-		case <-c.bwTimeout.C:
+		case <-bwTimeout.C:
 			c.bwLock.Lock()
 			if c.bw == nil {
-				c.bwLock.Unlock()
 				return
 			}
 			if c.bwFlushSkip == 1 {
