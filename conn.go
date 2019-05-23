@@ -268,7 +268,6 @@ type Conn struct {
 	br            *bufio.Reader
 	bw            *bufio.Writer
 	bwPresent     bool
-	bwFlushSkip   int
 	bwLock        sync.Mutex
 	bwCond        sync.Cond
 	readRemaining int64 // bytes remaining in current frame.
@@ -408,7 +407,6 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 			return errors.New("websocket: writing to closed connection")
 		}
 		out = c.bw
-		c.bwFlushSkip = 1
 		c.bwCond.Signal()
 	}
 	if out == nil {
@@ -430,8 +428,10 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 }
 
 func (c *Conn) flushThread() {
-	bwTimeout := time.NewTicker(writeTimeout)
-	defer bwTimeout.Stop()
+	bwTimeout := time.NewTimer(0)
+	if !bwTimeout.Stop() {
+		<-bwTimeout.C
+	}
 
 	c.bwLock.Lock()
 	defer c.bwLock.Unlock()
@@ -441,28 +441,23 @@ func (c *Conn) flushThread() {
 		if c.bw == nil {
 			return
 		}
-	nowait:
 		c.bwLock.Unlock()
-		select {
-		case <-bwTimeout.C:
-			c.bwLock.Lock()
-			if c.bw == nil {
-				return
+
+		bwTimeout.Reset(writeTimeout)
+		<-bwTimeout.C
+
+		c.bwLock.Lock()
+		if c.bw == nil {
+			return
+		}
+		c.conn.SetWriteDeadline(c.writeDeadline)
+		err := c.bw.Flush()
+		if err != nil {
+			c.writeErrMu.Lock()
+			if c.writeErr != nil {
+				c.writeErr = err
 			}
-			if c.bwFlushSkip == 1 {
-				// ticker goes all the time, wait at least 1 period before Flush
-				c.bwFlushSkip = 0
-				goto nowait
-			}
-			c.conn.SetWriteDeadline(c.writeDeadline)
-			err := c.bw.Flush()
-			if err != nil {
-				c.writeErrMu.Lock()
-				if c.writeErr != nil {
-					c.writeErr = err
-				}
-				c.writeErrMu.Unlock()
-			}
+			c.writeErrMu.Unlock()
 		}
 	}
 }
