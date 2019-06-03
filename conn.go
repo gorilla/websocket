@@ -339,19 +339,46 @@ func (c *Conn) Subprotocol() string {
 }
 
 // Close closes the underlying network connection without sending or waiting
-// for a close message.
+// for a close message.  Close flushes pending writes from c.bw, which might
+// block.  To avoid this, use CloseWithoutFlush().
 func (c *Conn) Close() error {
+	c.flush()
+	return c.CloseWithoutFlush()
+}
+
+// CloseWithoutFlush closes the underlying network connection without waiting
+// for pending data to be sent to the peer.
+func (c *Conn) CloseWithoutFlush() error {
+	err := c.conn.Close()
+
+	if c.bwPresent {
+		// Clean up the flushThread by clearing c.bw.
+		//
+		// Do this after closing c.conn, so that if flushThread()
+		// or write() is holding c.bwLock while blocking in a write,
+		// the write returns an error and causes them to release
+		// c.bwLock.
+		c.bwLock.Lock()
+		defer c.bwLock.Unlock()
+		if c.bw != nil {
+			c.bw = nil
+		}
+		c.bwCond.Signal()
+	}
+
+	return err
+}
+
+// flush flushes pending data from the buffered writer (c.bw) to the underlying
+// network connection, in case if a buffered writer is present.
+func (c *Conn) flush() {
 	if c.bwPresent {
 		c.bwLock.Lock()
 		defer c.bwLock.Unlock()
 		if c.bw != nil {
 			c.bw.Flush()
-			c.bw = nil
 		}
-		c.bwCond.Signal()
 	}
-	err := c.conn.Close()
-	return err
 }
 
 // LocalAddr returns the local network address.

@@ -33,6 +33,31 @@ func (c fakeNetConn) SetDeadline(t time.Time) error      { return nil }
 func (c fakeNetConn) SetReadDeadline(t time.Time) error  { return nil }
 func (c fakeNetConn) SetWriteDeadline(t time.Time) error { return nil }
 
+type pipeNetConn struct {
+	r *io.PipeReader
+	w *io.PipeWriter
+}
+
+func (c pipeNetConn) Read(buf []byte) (int, error) {
+	return c.r.Read(buf)
+}
+
+func (c pipeNetConn) Write(buf []byte) (int, error) {
+	return c.w.Write(buf)
+}
+
+func (c pipeNetConn) Close() error {
+	c.r.Close()
+	c.w.Close()
+	return nil
+}
+
+func (c pipeNetConn) LocalAddr() net.Addr                { return localAddr }
+func (c pipeNetConn) RemoteAddr() net.Addr               { return remoteAddr }
+func (c pipeNetConn) SetDeadline(t time.Time) error      { return nil }
+func (c pipeNetConn) SetReadDeadline(t time.Time) error  { return nil }
+func (c pipeNetConn) SetWriteDeadline(t time.Time) error { return nil }
+
 type fakeAddr int
 
 var (
@@ -679,5 +704,36 @@ func TestReadMaliciousPackets(t *testing.T) {
 	t.Logf("Read: %d, err: %v, %v\n", n, err, buf)
 	if err == nil {
 		t.FailNow()
+	}
+}
+
+func TestCloseWithoutFlush(t *testing.T) {
+	pr, _ := io.Pipe()
+	_, pw := io.Pipe()
+	pnc := pipeNetConn{r: pr, w: pw}
+	bw := bufio.NewWriter(pw)
+	c := newConn(pnc, true, 1024, 1024, nil, nil, bw, nil)
+
+	go func() {
+		for {
+			err := c.WriteMessage(TextMessage, []byte{1, 2, 3})
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	time.Sleep(time.Second)
+
+	closed := make(chan struct{})
+	go func() {
+		c.CloseWithoutFlush()
+		closed <- struct{}{}
+	}()
+
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("did not CloseWithoutFlush() within a second")
 	}
 }
