@@ -102,6 +102,7 @@ type Dialer struct {
 }
 
 // Dial creates a new client connection by calling DialContext with a background context.
+// In the case of an error, only the first 1024 bytes of the response will be returned.
 func (d *Dialer) Dial(urlStr string, requestHeader http.Header) (*Conn, *http.Response, error) {
 	return d.DialContext(context.Background(), urlStr, requestHeader)
 }
