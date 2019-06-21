@@ -469,6 +469,19 @@ func (c *Conn) flushThread() {
 	defer c.bwLock.Unlock()
 
 	for true {
+		if c.bw == nil {
+			return
+		}
+		c.conn.SetWriteDeadline(c.writeDeadline)
+		err := c.bw.Flush()
+		if err != nil {
+			c.writeErrMu.Lock()
+			if c.writeErr != nil {
+				c.writeErr = err
+			}
+			c.writeErrMu.Unlock()
+		}
+
 		c.bwCond.Wait()
 		if c.bw == nil {
 			return
@@ -482,18 +495,6 @@ func (c *Conn) flushThread() {
 		}
 
 		c.bwLock.Lock()
-		if c.bw == nil {
-			return
-		}
-		c.conn.SetWriteDeadline(c.writeDeadline)
-		err := c.bw.Flush()
-		if err != nil {
-			c.writeErrMu.Lock()
-			if c.writeErr != nil {
-				c.writeErr = err
-			}
-			c.writeErrMu.Unlock()
-		}
 	}
 }
 
