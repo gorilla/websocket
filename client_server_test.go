@@ -57,7 +57,8 @@ type cstServer struct {
 	waitForClientClose bool
 	sendClose          bool
 	sendCloseWC        bool
-	doClose            bool
+
+	gotClientClose chan struct{}
 }
 
 const (
@@ -115,6 +116,11 @@ func (t cstHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// echo a message back to the client
 		op, rd, err := ws.NextReader()
 		if err != nil {
+			if _, ok := err.(*CloseError); ok && t.s.waitForClientClose {
+				t.Log("got client close")
+				close(t.s.gotClientClose)
+				return
+			}
 			t.Logf("NextReader: %v", err)
 			return
 		}
@@ -150,9 +156,6 @@ func (t cstHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		t.Log("sent close")
-	}
-	if t.s.doClose {
-		ws.Close()
 	}
 }
 
@@ -951,7 +954,6 @@ func TestServerCloseControl(t *testing.T) {
 	testServerClose(t, s)
 }
 func testServerClose(t *testing.T, s *cstServer) {
-	s.doClose = true
 	defer s.Close()
 
 	ws, _, err := cstDialer.Dial(s.URL, nil)
@@ -979,5 +981,48 @@ func testServerClose(t *testing.T, s *cstServer) {
 		// ok
 	default:
 		t.Fatalf("ReadMessage: %v", err)
+	}
+}
+
+func TestClientCloseControl(t *testing.T) {
+	s, ws := tiestClientCloseSetup(t)
+	defer s.Close()
+	defer ws.Close()
+	err := ws.WriteControl(CloseMessage, FormatCloseMessage(CloseNormalClosure, ""), time.Now().Add(5*time.Second))
+	if err != nil {
+		t.Fatalf("client WriteControl(CloseMessage): %v", err)
+	}
+	testClientCloseFinish(t, s)
+}
+func TestClientCloseMessage(t *testing.T) {
+	s, ws := tiestClientCloseSetup(t)
+	err := ws.WriteMessage(CloseMessage, FormatCloseMessage(CloseNormalClosure, ""))
+	if err != nil {
+		t.Fatalf("client WriteMessage(CloseMessage): %v", err)
+	}
+	testClientCloseFinish(t, s)
+}
+func tiestClientCloseSetup(t *testing.T) (*cstServer, *Conn) {
+	s := newServer(t)
+	s.waitForClientClose = true
+	s.gotClientClose = make(chan struct{})
+
+	ws, _, err := cstDialer.Dial(s.URL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	ws.SetReadLimit(1000)
+	ws.SetReadDeadline(time.Now().Add(10 * time.Second))
+	sendRecv(t, ws)
+	sendRecv(t, ws)
+	sendRecv(t, ws)
+	return s, ws
+}
+func testClientCloseFinish(t *testing.T, s *cstServer) {
+	select {
+	case <-s.gotClientClose:
+		// ok
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for server to get client close")
 	}
 }
