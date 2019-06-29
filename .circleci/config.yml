@@ -11,7 +11,20 @@ jobs:
       - checkout
       - run: go version
       - run: go get -t -v ./...
-      - run: diff -u <(echo -n) <(gofmt -d .)
+      # Only run gofmt, vet & lint against the latest Go version
+      - run: >
+          if [[ "$LATEST" = true ]]; then
+            go get -u golang.org/x/lint/golint
+            golint ./...
+          fi
+      - run: >
+          if [[ "$LATEST" = true ]]; then
+            diff -u <(echo -n) <(gofmt -d .)
+          fi
+      - run: >
+          if [[ "$LATEST" = true ]]; then
+            go vet -v .
+          fi
       - run: if [[ "$LATEST" = true ]]; then go vet -v .; fi
       - run: go test -v -race ./...
 
@@ -19,7 +32,6 @@ jobs:
     <<: *test
     environment:
       LATEST: true
-
 
   "1.12":
     <<: *test
@@ -50,7 +62,6 @@ jobs:
     <<: *test
     docker:
       - image: circleci/golang:1.7
-
 
 workflows:
   version: 2
