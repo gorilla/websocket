@@ -297,7 +297,7 @@ func TestWriteBufferPoolSync(t *testing.T) {
 // errorWriter is an io.Writer than returns an error on all writes.
 type errorWriter struct{}
 
-func (ew errorWriter) Write(p []byte) (int, error) { return 0, errors.New("Error!") }
+func (ew errorWriter) Write(p []byte) (int, error) { return 0, errors.New("error") }
 
 // TestWriteBufferPoolError ensures that buffer is returned to pool after error
 // on write.
