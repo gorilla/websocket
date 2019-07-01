@@ -385,7 +385,7 @@ func (c *Conn) flush() error {
 			err := c.bw.Flush()
 			if err != nil {
 				c.writeErrMu.Lock()
-				if c.writeErr != nil {
+				if c.writeErr == nil {
 					c.writeErr = err
 				}
 				c.writeErrMu.Unlock()
@@ -486,7 +486,7 @@ func (c *Conn) flushThread() {
 		err := c.bw.Flush()
 		if err != nil {
 			c.writeErrMu.Lock()
-			if c.writeErr != nil {
+			if c.writeErr == nil {
 				c.writeErr = err
 			}
 			c.writeErrMu.Unlock()
