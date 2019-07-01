@@ -44,12 +44,21 @@ var cstDialer = Dialer{
 	HandshakeTimeout: 30 * time.Second,
 }
 
-type cstHandler struct{ *testing.T }
+type cstHandler struct {
+	*testing.T
+	s *cstServer
+}
 
 type cstServer struct {
 	*httptest.Server
 	URL string
 	t   *testing.T
+
+	waitForClientClose bool
+	sendClose          bool
+	sendCloseWC        bool
+
+	gotClientClose chan struct{}
 }
 
 const (
@@ -60,7 +69,7 @@ const (
 
 func newServer(t *testing.T) *cstServer {
 	var s cstServer
-	s.Server = httptest.NewServer(cstHandler{t})
+	s.Server = httptest.NewServer(cstHandler{t, &s})
 	s.Server.URL += cstRequestURI
 	s.URL = makeWsProto(s.Server.URL)
 	return &s
@@ -68,7 +77,7 @@ func newServer(t *testing.T) *cstServer {
 
 func newTLSServer(t *testing.T) *cstServer {
 	var s cstServer
-	s.Server = httptest.NewTLSServer(cstHandler{t})
+	s.Server = httptest.NewTLSServer(cstHandler{t, &s})
 	s.Server.URL += cstRequestURI
 	s.URL = makeWsProto(s.Server.URL)
 	return &s
@@ -103,23 +112,50 @@ func (t cstHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ws.Close()
 		return
 	}
-	op, rd, err := ws.NextReader()
-	if err != nil {
-		t.Logf("NextReader: %v", err)
-		return
+	for true {
+		// echo a message back to the client
+		op, rd, err := ws.NextReader()
+		if err != nil {
+			if _, ok := err.(*CloseError); ok && t.s.waitForClientClose {
+				t.Log("got client close")
+				close(t.s.gotClientClose)
+				return
+			}
+			t.Logf("NextReader: %v", err)
+			return
+		}
+		wr, err := ws.NextWriter(op)
+		if err != nil {
+			t.Logf("NextWriter: %v", err)
+			return
+		}
+		if _, err = io.Copy(wr, rd); err != nil {
+			t.Logf("NextWriter: %v", err)
+			return
+		}
+		if err := wr.Close(); err != nil {
+			t.Logf("Close: %v", err)
+			return
+		}
+		t.Log("sent message")
+		if !t.s.waitForClientClose {
+			break
+		}
 	}
-	wr, err := ws.NextWriter(op)
-	if err != nil {
-		t.Logf("NextWriter: %v", err)
-		return
-	}
-	if _, err = io.Copy(wr, rd); err != nil {
-		t.Logf("NextWriter: %v", err)
-		return
-	}
-	if err := wr.Close(); err != nil {
-		t.Logf("Close: %v", err)
-		return
+	if t.s.sendClose {
+		err = ws.WriteMessage(CloseMessage, FormatCloseMessage(CloseNormalClosure, ""))
+		if err != nil {
+			t.Logf("WriteMessage(CloseMessage): %v", err)
+			return
+		}
+		t.Log("sent close")
+	} else if t.s.sendCloseWC {
+		err = ws.WriteControl(CloseMessage, FormatCloseMessage(CloseNormalClosure, ""), time.Now().Add(5*time.Second))
+		if err != nil {
+			t.Logf("WriteControl(CloseMessage): %v", err)
+			return
+		}
+		t.Log("sent close")
 	}
 }
 
@@ -138,7 +174,8 @@ func sendRecv(t *testing.T, ws *Conn) {
 	if err := ws.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
 		t.Fatalf("SetReadDeadline: %v", err)
 	}
-	ws.Unsafe = true
+	ws.SetReadLimit(1000)
+	//ws.Unsafe = true
 	_, p, err := ws.ReadMessage()
 	if err != nil {
 		t.Fatalf("ReadMessage: %v", err)
@@ -903,4 +940,89 @@ func TestEmptyTracingDialWithContext(t *testing.T) {
 
 	defer ws.Close()
 	sendRecv(t, ws)
+}
+
+func TestServerCloseMessage(t *testing.T) {
+	s := newServer(t)
+	s.sendClose = true
+	testServerClose(t, s)
+}
+
+func TestServerCloseControl(t *testing.T) {
+	s := newServer(t)
+	s.sendCloseWC = true
+	testServerClose(t, s)
+}
+func testServerClose(t *testing.T, s *cstServer) {
+	defer s.Close()
+
+	ws, _, err := cstDialer.Dial(s.URL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer ws.Close()
+	ws.SetReadLimit(1000)
+	ws.SetReadDeadline(time.Now().Add(10 * time.Second))
+	sendRecv(t, ws)
+	msg := "blah blah blah"
+	err = ws.WriteMessage(TextMessage, []byte(msg))
+	if err != nil {
+		t.Fatalf("second write message: %v", err)
+	}
+	if err := ws.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
+	_, _, err = ws.ReadMessage()
+	switch err.(type) {
+	case nil:
+		// ok
+		t.Fatalf("ReadMessage: should have been closed")
+	case *CloseError:
+		// ok
+	default:
+		t.Fatalf("ReadMessage: %v", err)
+	}
+}
+
+func TestClientCloseControl(t *testing.T) {
+	s, ws := tiestClientCloseSetup(t)
+	defer s.Close()
+	defer ws.Close()
+	err := ws.WriteControl(CloseMessage, FormatCloseMessage(CloseNormalClosure, ""), time.Now().Add(5*time.Second))
+	if err != nil {
+		t.Fatalf("client WriteControl(CloseMessage): %v", err)
+	}
+	testClientCloseFinish(t, s)
+}
+func TestClientCloseMessage(t *testing.T) {
+	s, ws := tiestClientCloseSetup(t)
+	err := ws.WriteMessage(CloseMessage, FormatCloseMessage(CloseNormalClosure, ""))
+	if err != nil {
+		t.Fatalf("client WriteMessage(CloseMessage): %v", err)
+	}
+	testClientCloseFinish(t, s)
+}
+func tiestClientCloseSetup(t *testing.T) (*cstServer, *Conn) {
+	s := newServer(t)
+	s.waitForClientClose = true
+	s.gotClientClose = make(chan struct{})
+
+	ws, _, err := cstDialer.Dial(s.URL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	ws.SetReadLimit(1000)
+	ws.SetReadDeadline(time.Now().Add(10 * time.Second))
+	sendRecv(t, ws)
+	sendRecv(t, ws)
+	sendRecv(t, ws)
+	return s, ws
+}
+func testClientCloseFinish(t *testing.T, s *cstServer) {
+	select {
+	case <-s.gotClientClose:
+		// ok
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for server to get client close")
+	}
 }

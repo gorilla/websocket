@@ -376,14 +376,24 @@ func (c *Conn) CloseWithoutFlush() error {
 
 // flush flushes pending data from the buffered writer (c.bw) to the underlying
 // network connection, in case if a buffered writer is present.
-func (c *Conn) flush() {
+func (c *Conn) flush() error {
 	if c.bwPresent {
 		c.bwLock.Lock()
 		defer c.bwLock.Unlock()
 		if c.bw != nil {
-			c.bw.Flush()
+			c.conn.SetWriteDeadline(c.writeDeadline)
+			err := c.bw.Flush()
+			if err != nil {
+				c.writeErrMu.Lock()
+				if c.writeErr == nil {
+					c.writeErr = err
+				}
+				c.writeErrMu.Unlock()
+			}
+			return err
 		}
 	}
+	return nil
 }
 
 // LocalAddr returns the local network address.
@@ -476,7 +486,7 @@ func (c *Conn) flushThread() {
 		err := c.bw.Flush()
 		if err != nil {
 			c.writeErrMu.Lock()
-			if c.writeErr != nil {
+			if c.writeErr == nil {
 				c.writeErr = err
 			}
 			c.writeErrMu.Unlock()
@@ -534,27 +544,7 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 		}
 	}
 
-	timer := time.NewTimer(d)
-	select {
-	case <-c.mu:
-		timer.Stop()
-	case <-timer.C:
-		return errWriteTimeout
-	}
-	defer func() { c.mu <- true }()
-
-	c.writeErrMu.Lock()
-	err := c.writeErr
-	c.writeErrMu.Unlock()
-	if err != nil {
-		return err
-	}
-
-	c.conn.SetWriteDeadline(deadline)
-	_, err = c.conn.Write(buf)
-	if err != nil {
-		return c.writeFatal(err)
-	}
+	err := c.write(messageType, deadline, buf, nil)
 	if messageType == CloseMessage {
 		c.writeFatal(ErrCloseSent)
 	}
@@ -1148,8 +1138,8 @@ func (r *messageReader) Close() error {
 // NEVER USE THIS. An untrusted peer could send an explosively compressed message. A megabyte of zeros can compress down to about 1kB. Always use NextReader() and kill the connection if you read too long a message.
 // ReadMessage() will error out immediately unless Conn.Unsafe is true.
 func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
-	if !c.Unsafe {
-		return noFrame, nil, errors.New("websocket: ReadMessage is not safe but Conn.Unsafe is not set")
+	if c.readLimit == 0 && !c.Unsafe {
+		return noFrame, nil, errors.New("websocket: ReadMessage() is not safe without SetReadLimit() and Conn.Unsafe is not set")
 	}
 	var r io.Reader
 	messageType, r, err = c.NextReader()
