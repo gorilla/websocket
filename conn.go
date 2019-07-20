@@ -418,7 +418,7 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 
 	d := time.Hour * 1000
 	if !deadline.IsZero() {
-		d = deadline.Sub(time.Now())
+		d = time.Until(deadline)
 		if d < 0 {
 			return errWriteTimeout
 		}
