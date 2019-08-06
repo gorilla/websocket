@@ -267,6 +267,7 @@ type Conn struct {
 	readFinal     bool  // true the current message has more frames.
 	readLength    int64 // Message size.
 	readLimit     int64 // Maximum message size.
+	readLimitFunc func()
 	readMaskPos   int
 	readMaskKey   [4]byte
 	handlePong    func(string) error
@@ -862,6 +863,9 @@ func (c *Conn) advanceFrame() (int, error) {
 
 		c.readLength += c.readRemaining
 		if c.readLimit > 0 && c.readLength > c.readLimit {
+			if c.readLimitFunc != nil {
+				c.readLimitFunc()
+			}
 			c.WriteControl(CloseMessage, FormatCloseMessage(CloseMessageTooBig, ""), time.Now().Add(writeWait))
 			return noFrame, ErrReadLimit
 		}
@@ -1044,6 +1048,12 @@ func (c *Conn) SetReadDeadline(t time.Time) error {
 // and returns ErrReadLimit to the application.
 func (c *Conn) SetReadLimit(limit int64) {
 	c.readLimit = limit
+}
+
+// SetReadLimitFunc has the same effect as SetReadLimit, but with more callback functions.
+func (c *Conn) SetReadLimitFunc(limit int64, f func()) {
+	c.readLimit = limit
+	c.readLimitFunc = f
 }
 
 // CloseHandler returns the current close handler
