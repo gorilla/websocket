@@ -457,6 +457,47 @@ func TestWriteAfterMessageWriterClose(t *testing.T) {
 	}
 }
 
+func TestReadLimitFunc(t *testing.T) {
+	const readLimit = 512
+	message := make([]byte, readLimit+1)
+
+	call := false
+
+	var b1, b2 bytes.Buffer
+	wc := newConn(&fakeNetConn{Writer: &b1}, false, 1024, readLimit-2, nil, nil, nil)
+	rc := newTestConn(&b1, &b2, true)
+	rc.SetReadLimitFunc(readLimit, func() {
+		call = true
+	})
+
+	// Send message at the limit with interleaved pong.
+	w, _ := wc.NextWriter(BinaryMessage)
+	w.Write(message[:readLimit-1])
+	wc.WriteControl(PongMessage, []byte("this is a pong"), time.Now().Add(10*time.Second))
+	w.Write(message[:1])
+	w.Close()
+
+	// Send message larger than the limit.
+	wc.WriteMessage(BinaryMessage, message[:readLimit+1])
+
+	op, _, err := rc.NextReader()
+	if op != BinaryMessage || err != nil {
+		t.Fatalf("1: NextReader() returned %d, %v", op, err)
+	}
+	op, r, err := rc.NextReader()
+	if op != BinaryMessage || err != nil {
+		t.Fatalf("2: NextReader() returned %d, %v", op, err)
+	}
+	_, err = io.Copy(ioutil.Discard, r)
+	if err != ErrReadLimit {
+		t.Fatalf("io.Copy() returned %v", err)
+	}
+
+	if !call {
+		t.Fatalf("Callback function is not called")
+	}
+}
+
 func TestReadLimit(t *testing.T) {
 
 	const readLimit = 512
