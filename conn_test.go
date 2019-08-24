@@ -533,17 +533,21 @@ func TestReadLimit(t *testing.T) {
 		}
 
 		var buf [10]byte
+		var read int
 		n, err := r.Read(buf[:])
 		if err != nil && err != ErrReadLimit {
-			t.Fatalf("read limit exceeded: %v", err)
+			t.Fatalf("unexpected error testing read limit: %v", err)
 		}
+		read += n
+
 		n, err = r.Read(buf[:])
 		if err != nil && err != ErrReadLimit {
-			t.Fatalf("read limit exceeded: %v", err)
+			t.Fatalf("unexpected error testing read limit: %v", err)
 		}
+		read += n
 
-		if err == nil && n > 0 {
-			t.Fatalf("read limit exceeded: limit %d, read %d", readLimit, n)
+		if err == nil && read > readLimit {
+			t.Fatalf("read limit exceeded: limit %d, read %d", readLimit, read)
 		}
 	})
 }
