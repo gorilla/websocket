@@ -841,8 +841,10 @@ func (c *Conn) advanceFrame() (int, error) {
 	// https://tools.ietf.org/html/rfc6455#section-5.2
 	//
 	// The length of the "Payload data", in bytes: if 0-125, that is the payload
-	// length. If 126, the following 2 bytes interpreted as a 16-bit unsigned
-	// integer are the payload length. If 127, the following 8 bytes interpreted as
+	// length.
+	// - If 126, the following 2 bytes interpreted as a 16-bit unsigned
+	// integer are the payload length.
+	// - If 127, the following 8 bytes interpreted as
 	// a 64-bit unsigned integer (the most significant bit MUST be 0) are the
 	// payload length. Multibyte length quantities are expressed in network byte
 	// order.
@@ -863,7 +865,7 @@ func (c *Conn) advanceFrame() (int, error) {
 			return noFrame, err
 		}
 
-		if err := c.setReadRemaining(int64(binary.BigEndian.Uint16(p))); err != nil {
+		if err := c.setReadRemaining(int64(binary.BigEndian.Uint64(p))); err != nil {
 			return noFrame, err
 		}
 	}
