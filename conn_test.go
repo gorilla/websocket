@@ -56,9 +56,9 @@ func newTestConn(r io.Reader, w io.Writer, isServer bool) *Conn {
 
 func TestFraming(t *testing.T) {
 	frameSizes := []int{
-		0, 1, 2, 124, 125, 126, 127, 128, 129, 65534, 65535,
-		// 65536, 65537
+		0, 1, 2, 124, 125, 126, 127, 128, 129, 65534, 65535, 65536, 65537,
 	}
+
 	var readChunkers = []struct {
 		name string
 		f    func(io.Reader) io.Reader
