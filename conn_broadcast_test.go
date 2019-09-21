@@ -91,7 +91,7 @@ func (b *broadcastBench) close() {
 	close(b.closeCh)
 }
 
-func (b *broadcastBench) runOnce(msg *broadcastMessage) {
+func (b *broadcastBench) broadcastOnce(msg *broadcastMessage) {
 	for _, c := range b.conns {
 		c.msgCh <- msg
 	}
@@ -123,7 +123,7 @@ func BenchmarkBroadcast(b *testing.B) {
 					pm, _ := NewPreparedMessage(TextMessage, message.payload)
 					message.prepared = pm
 				}
-				bench.runOnce(message)
+				bench.broadcastOnce(message)
 			}
 			b.ReportAllocs()
 		})
