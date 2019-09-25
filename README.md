@@ -32,42 +32,38 @@ subdirectory](https://github.com/gorilla/websocket/tree/master/examples/autobahn
 
 ### Gorilla WebSocket compared with other packages
 
-<table>
-<tr>
-<th></th>
-<th><a href="http://godoc.org/github.com/gorilla/websocket">github.com/gorilla</a></th>
-<th><a href="http://godoc.org/golang.org/x/net/websocket">golang.org/x/net</a></th>
-<th><a href="http://godoc.org/nhooyr.io/websocket">nhooyr.io/websocket</a></th>
-</tr>
-<tr>
-<tr><td colspan="3"><a href="http://tools.ietf.org/html/rfc6455">RFC 6455</a> Features</td></tr>
-<tr><td>Passes <a href="https://github.com/crossbario/autobahn-testsuite">Autobahn Test Suite</a></td><td><a href="https://github.com/gorilla/websocket/tree/master/examples/autobahn">Yes</a></td><td>No</td><td><a href="https://github.com/nhooyr/websocket/blob/master/conn_test.go">Yes</a></td></tr>
-<tr><td>Receive <a href="https://tools.ietf.org/html/rfc6455#section-5.4">fragmented</a> message<td>Yes</td><td><a href="https://code.google.com/p/go/issues/detail?id=7632">No</a>, see note 1</td><td>Yes</td></tr>
-<tr><td>Send <a href="https://tools.ietf.org/html/rfc6455#section-5.5.1">close</a> message</td><td><a href="http://godoc.org/github.com/gorilla/websocket#hdr-Control_Messages">Yes</a></td><td><a href="https://code.google.com/p/go/issues/detail?id=4588">No</a></td><td><a href="https://godoc.org/nhooyr.io/websocket#Conn.Close">Yes</a></td></tr>
-<tr><td>Send <a href="https://tools.ietf.org/html/rfc6455#section-5.5.2">pings</a> and receive <a href="https://tools.ietf.org/html/rfc6455#section-5.5.3">pongs</a></td><td><a href="http://godoc.org/github.com/gorilla/websocket#hdr-Control_Messages">Yes</a></td><td>No</td><td><a href="https://godoc.org/nhooyr.io/websocket#Conn.Ping">Yes</a></td></tr>
-<tr><td>Get the <a href="https://tools.ietf.org/html/rfc6455#section-5.6">type</a> of a received data message</td><td>Yes</td><td>Yes, see note 2</td><td>Yes</td></tr>
-<tr><td colspan="3">Other Features</td></tr>
-<tr><td><a href="https://tools.ietf.org/html/rfc7692">Compression Extensions</a></td><td>Experimental</td><td>No</td><td><a href="https://github.com/nhooyr/websocket#design-justifications">No</a></td></tr>
-<tr><td>Read message using io.Reader</td><td><a href="http://godoc.org/github.com/gorilla/websocket#Conn.NextReader">Yes</a></td><td>No, see note 3</td><td><a href="https://godoc.org/nhooyr.io/websocket#Conn.Reader">Yes</a></td></tr>
-<tr><td>Write message using io.WriteCloser</td><td><a href="http://godoc.org/github.com/gorilla/websocket#Conn.NextWriter">Yes</a></td><td>No, see note 3</td><td><a href="https://godoc.org/nhooyr.io/websocket#Conn.Writer">Yes</a></td></tr>
-<tr><td>Compile for Wasm</td><td><a href="https://github.com/gorilla/websocket/issues/432">No</a></td><td>No</td><td><a href="https://godoc.org/nhooyr.io/websocket#hdr-Wasm">Yes</a></td></tr>
-<tr><td>Low level protocol control</td><td>Yes</td><td>No</td><td>No</td></tr>
-<tr><td>Use stdlib <a href="https://golang.org/pkg/net/http/#Client">*http.Client</a></td><td>No</td><td>No</td><td><a href="https://godoc.org/nhooyr.io/websocket#DialOptions">Yes</a></td></tr>
-<tr><td>Concurrent writers</td><td>No</td><td>Yes</td><td>Yes</td></tr>
-<tr><td>Configurable buffer sizes</td><td><a href="https://godoc.org/github.com/gorilla/websocket#hdr-Buffers">Yes</a></td><td>No</td><td>No</td></tr>
-<tr><td><a href="https://blog.golang.org/context">context.Context</a> based cancellation</td><td>No</td><td>No</td><td>Yes</td></tr>
-<tr><td>Prepared messages</td><td><a href="https://godoc.org/github.com/gorilla/websocket#PreparedMessage">Yes</a></td><td>No</td><td>No</td></tr>
-<tr><td><a href="https://golang.org/pkg/net/#Conn">net.Conn</a> adapter</td><td>No</td><td><a href="https://godoc.org/golang.org/x/net/websocket#Conn">Yes</a></td><td><a href="https://godoc.org/nhooyr.io/websocket#NetConn">Yes</a></td></tr>
-</table>
+This comparison used to include [golang.org/x/net/websocket](http://godoc.org/golang.org/x/net/websocket) but it has
+been deprecated. Do not use [golang.org/x/net/websocket](http://godoc.org/golang.org/x/net/websocket) in future projects.
 
-Notes:
+See [golang/go#18152](https://github.com/golang/go/issues/18152)
 
-1. Large messages are fragmented in [Chrome's new WebSocket implementation](http://www.ietf.org/mail-archive/web/hybi/current/msg10503.html).
-2. The application can get the type of a received data message by implementing
-   a [Codec marshal](http://godoc.org/golang.org/x/net/websocket#Codec.Marshal)
-   function.
-3. The go.net io.Reader and io.Writer operate across WebSocket frame boundaries.
-  Read returns when the input buffer is full or a frame boundary is
-  encountered. Each call to Write sends a single frame message. The Gorilla
-  io.Reader and io.WriteCloser operate on a single WebSocket message.
-4. Another comparison of available Go WebSocket libraries is available at [nhooyr.io/websocket](https://github.com/nhooyr/websocket#comparison)
+Another comparison of available Go WebSocket libraries is available at [nhooyr.io/websocket](https://github.com/nhooyr/websocket#comparison)
+
+#### [nhooyr.io/websocket](https://nhooyr.io/websocket)
+
+gorilla/websocket is 6 years old and thus very mature and battle tested. On the other hand, it has
+accumulated cruft over the years.
+[nhooyr.io/websocket](http://godoc.org/nhooyr.io/websocket) is much newer and attempts to
+provide a more idiomatic, minimal and useful API for WebSockets.
+
+|  | [github.com/gorilla](http://godoc.org/github.com/gorilla/websocket) | [nhooyr.io/websocket](http://godoc.org/nhooyr.io/websocket) |
+| :--- | ---: | ---: |
+| **[RFC 6455](http://tools.ietf.org/html/rfc6455) Features** | 
+| Passes [Autobahn Test Suite](https://github.com/crossbario/autobahn-testsuite) | [Yes](https://github.com/gorilla/websocket/tree/master/examples/autobahn) | [Yes](https://github.com/nhooyr/websocket/blob/master/conn_test.go) |
+| Receive [fragmented](https://tools.ietf.org/html/rfc6455#section-5.4) message | Yes | Yes |
+| Send [close](https://tools.ietf.org/html/rfc6455#section-5.5.1) message | [Yes](http://godoc.org/github.com/gorilla/websocket#hdr-Control_Messages) | [Yes](https://godoc.org/nhooyr.io/websocket#Conn.Close) |
+| Send [pings](https://tools.ietf.org/html/rfc6455#section-5.5.2) and receive [pongs](https://tools.ietf.org/html/rfc6455#section-5.5.3) | [Yes](http://godoc.org/github.com/gorilla/websocket#hdr-Control_Messages) | [Yes](https://godoc.org/nhooyr.io/websocket#Conn.Ping)
+| Get [type](https://tools.ietf.org/html/rfc6455#section-5.6) of received message | Yes | Yes |
+| **Other Features** |
+| Well tested | Yes | [Yes](https://codecov.io/gh/nhooyr/websocket) | 
+| Low level protocol control | [Yes](http://godoc.org/github.com/gorilla/websocket#hdr-Control_Messages) | No |
+| [Compression Extensions](https://tools.ietf.org/html/rfc7692) | [Experimental](https://godoc.org/github.com/gorilla/websocket#hdr-Compression_EXPERIMENTAL) | [No](https://github.com/nhooyr/websocket#design-justifications) |
+| Read with [io.Reader](https://golang.org/pkg/io/#Reader) | [Yes](http://godoc.org/github.com/gorilla/websocket#Conn.NextReader) | [Yes](https://godoc.org/nhooyr.io/websocket#Conn.Reader) |
+| Write with [io.WriteCloser](https://golang.org/pkg/io/#WriteCloser) | [Yes](http://godoc.org/github.com/gorilla/websocket#Conn.NextWriter) | [Yes](https://godoc.org/nhooyr.io/websocket#Conn.Writer) |
+| Compile for [Wasm](https://github.com/golang/go/wiki/WebAssembly) | [No](https://github.com/gorilla/websocket/issues/432) | [Yes](https://godoc.org/nhooyr.io/websocket#hdr-Wasm) |
+| Use stdlib [*http.Client](https://golang.org/pkg/net/http/#Client) | No | [Yes](https://godoc.org/nhooyr.io/websocket#DialOptions) |
+| Concurrent writers | [No](https://godoc.org/github.com/gorilla/websocket#hdr-Concurrency) | [Yes](https://godoc.org/nhooyr.io/websocket#Conn) |
+| Configurable buffer sizes | [Yes](https://godoc.org/github.com/gorilla/websocket#hdr-Buffers) | No |
+| Prepared messages | [Yes](https://godoc.org/github.com/gorilla/websocket#PreparedMessage) | No |
+| Full [context.Context](https://blog.golang.org/context)  support | No | Yes
+| [net.Conn](https://golang.org/pkg/net/#Conn) adapter | No | [Yes](https://godoc.org/nhooyr.io/websocket#NetConn) |
