@@ -694,3 +694,12 @@ func TestFailedConnectionReadPanic(t *testing.T) {
 	}
 	t.Fatal("should not get here")
 }
+
+func TestWriteNilPreparedMessage(t *testing.T) {
+	var connBuf bytes.Buffer
+	wc := newTestConn(nil, &connBuf, true)
+
+	if wc.WritePreparedMessage(nil) != nil {
+		t.Error("nil writes should do nothing")
+	}
+}

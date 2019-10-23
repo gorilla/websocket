@@ -726,6 +726,10 @@ func (w *messageWriter) Close() error {
 
 // WritePreparedMessage writes prepared message into connection.
 func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
+	if pm == nil {
+		// Do nothing with nil messages
+		return nil
+	}
 	frameType, frameData, err := pm.frame(prepareKey{
 		isServer:         c.isServer,
 		compress:         c.newCompressionWriter != nil && c.enableWriteCompression && isData(pm.messageType),
