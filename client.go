@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -357,7 +358,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		buf := make([]byte, 1024)
 		n, _ := io.ReadFull(resp.Body, buf)
 		resp.Body = ioutil.NopCloser(bytes.NewReader(buf[:n]))
-		return nil, resp, ErrBadHandshake
+		return nil, resp, errors.New(fmt.Sprintf("%v, status code: %v", ErrBadHandshake.Error(), resp.StatusCode))
 	}
 
 	for _, ext := range parseExtensions(resp.Header) {
