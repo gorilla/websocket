@@ -67,7 +67,7 @@ window.addEventListener("load", function(evt) {
 
     var print = function(message) {
         var d = document.createElement("div");
-        d.innerHTML = message;
+        d.textContent = message;
         output.appendChild(d);
     };
 
