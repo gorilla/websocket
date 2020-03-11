@@ -1004,6 +1004,14 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 	return noFrame, nil, c.readErr
 }
 
+func (c *Conn) IsBufferEmpty() bool {
+	if c.br.Buffered() > 0 {
+		return false
+	}
+
+	return true
+}
+
 type messageReader struct{ c *Conn }
 
 func (r *messageReader) Read(b []byte) (int, error) {
