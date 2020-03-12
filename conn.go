@@ -1005,11 +1005,7 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 }
 
 func (c *Conn) IsBufferEmpty() bool {
-	if c.br.Buffered() > 0 {
-		return false
-	}
-
-	return true
+	return c.br.Buffered() == 0 
 }
 
 type messageReader struct{ c *Conn }
