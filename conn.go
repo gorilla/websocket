@@ -429,7 +429,7 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 		maskBytes(key, 0, buf[6:])
 	}
 
-	d := time.Hour * 1000
+	d := 1000 * time.Hour
 	if !deadline.IsZero() {
 		d = deadline.Sub(time.Now())
 		if d < 0 {
