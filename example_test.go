@@ -23,10 +23,9 @@ var (
 // This server application works with a client application running in the
 // browser. The client application does not explicitly close the websocket. The
 // only expected close message from the client has the code
-// websocket.CloseGoingAway. All other other close messages are likely the
+// websocket.CloseGoingAway. All other close messages are likely the
 // result of an application or protocol error and are logged to aid debugging.
 func ExampleIsUnexpectedCloseError() {
-
 	for {
 		messageType, p, err := c.ReadMessage()
 		if err != nil {
@@ -35,11 +34,11 @@ func ExampleIsUnexpectedCloseError() {
 			}
 			return
 		}
-		processMesage(messageType, p)
+		processMessage(messageType, p)
 	}
 }
 
-func processMesage(mt int, p []byte) {}
+func processMessage(mt int, p []byte) {}
 
 // TestX prevents godoc from showing this entire file in the example. Remove
 // this function when a second example is added.
