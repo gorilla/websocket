@@ -587,7 +587,7 @@ func TestHost(t *testing.T) {
 		server             *httptest.Server // server to use
 		url                string           // host for request URI
 		header             string           // optional request host header
-		tls                string           // optiona host for tls ServerName
+		tls                string           // optional host for tls ServerName
 		wantAddr           string           // expected host for dial
 		wantHeader         string           // expected request header on server
 		insecureSkipVerify bool
