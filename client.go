@@ -57,6 +57,11 @@ type Dialer struct {
 	// NetDialContext is nil, net.DialContext is used.
 	NetDialContext func(ctx context.Context, network, addr string) (net.Conn, error)
 
+	// DialTLS specifies the dial function for creating TLS connections
+	// for non-proxied HTTPS requests. If DialTLS is nil, net.Dial and
+	// net.TLSClientConfig are used.
+	DialTLS func(network, addr string) (net.Conn, error)
+
 	// Proxy specifies a function to return a proxy for a given
 	// Request. If the function returns a non-nil error, the
 	// request is aborted with the provided error.
@@ -234,93 +239,103 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		defer cancel()
 	}
 
-	// Get network dial function.
-	var netDial func(network, add string) (net.Conn, error)
-
-	if d.NetDialContext != nil {
-		netDial = func(network, addr string) (net.Conn, error) {
-			return d.NetDialContext(ctx, network, addr)
-		}
-	} else if d.NetDial != nil {
-		netDial = d.NetDial
-	} else {
-		netDialer := &net.Dialer{}
-		netDial = func(network, addr string) (net.Conn, error) {
-			return netDialer.DialContext(ctx, network, addr)
-		}
-	}
-
-	// If needed, wrap the dial function to set the connection deadline.
-	if deadline, ok := ctx.Deadline(); ok {
-		forwardDial := netDial
-		netDial = func(network, addr string) (net.Conn, error) {
-			c, err := forwardDial(network, addr)
-			if err != nil {
-				return nil, err
-			}
-			err = c.SetDeadline(deadline)
-			if err != nil {
-				c.Close()
-				return nil, err
-			}
-			return c, nil
-		}
-	}
-
-	// If needed, wrap the dial function to connect through a proxy.
-	if d.Proxy != nil {
-		proxyURL, err := d.Proxy(req)
-		if err != nil {
-			return nil, nil, err
-		}
-		if proxyURL != nil {
-			dialer, err := proxy_FromURL(proxyURL, netDialerFunc(netDial))
-			if err != nil {
-				return nil, nil, err
-			}
-			netDial = dialer.Dial
-		}
-	}
-
 	hostPort, hostNoPort := hostPortNoPort(u)
 	trace := httptrace.ContextClientTrace(ctx)
 	if trace != nil && trace.GetConn != nil {
 		trace.GetConn(hostPort)
 	}
 
-	netConn, err := netDial("tcp", hostPort)
-	if trace != nil && trace.GotConn != nil {
-		trace.GotConn(httptrace.GotConnInfo{
-			Conn: netConn,
-		})
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-
+	var netConn net.Conn
 	defer func() {
 		if netConn != nil {
 			netConn.Close()
 		}
 	}()
 
-	if u.Scheme == "https" {
-		cfg := cloneTLSConfig(d.TLSClientConfig)
-		if cfg.ServerName == "" {
-			cfg.ServerName = hostNoPort
-		}
-		tlsConn := tls.Client(netConn, cfg)
-		netConn = tlsConn
-
-		var err error
-		if trace != nil {
-			err = doHandshakeWithTrace(trace, tlsConn, cfg)
-		} else {
-			err = doHandshake(tlsConn, cfg)
-		}
-
+	if u.Scheme == "https" && d.DialTLS != nil {
+		tlsConn, err := d.DialTLS("tcp", hostPort)
 		if err != nil {
 			return nil, nil, err
+		}
+		netConn = tlsConn
+	} else {
+		// Get network dial function.
+		var netDial func(network, add string) (net.Conn, error)
+
+		if d.NetDialContext != nil {
+			netDial = func(network, addr string) (net.Conn, error) {
+				return d.NetDialContext(ctx, network, addr)
+			}
+		} else if d.NetDial != nil {
+			netDial = d.NetDial
+		} else {
+			netDialer := &net.Dialer{}
+			netDial = func(network, addr string) (net.Conn, error) {
+				return netDialer.DialContext(ctx, network, addr)
+			}
+		}
+
+		// If needed, wrap the dial function to set the connection deadline.
+		if deadline, ok := ctx.Deadline(); ok {
+			forwardDial := netDial
+			netDial = func(network, addr string) (net.Conn, error) {
+				c, err := forwardDial(network, addr)
+				if err != nil {
+					return nil, err
+				}
+				err = c.SetDeadline(deadline)
+				if err != nil {
+					c.Close()
+					return nil, err
+				}
+				return c, nil
+			}
+		}
+
+		// If needed, wrap the dial function to connect through a proxy.
+		if d.Proxy != nil {
+			proxyURL, err := d.Proxy(req)
+			if err != nil {
+				return nil, nil, err
+			}
+			if proxyURL != nil {
+				dialer, err := proxy_FromURL(proxyURL, netDialerFunc(netDial))
+				if err != nil {
+					return nil, nil, err
+				}
+				netDial = dialer.Dial
+			}
+		}
+
+		var err error
+		netConn, err = netDial("tcp", hostPort)
+		if trace != nil && trace.GotConn != nil {
+			trace.GotConn(httptrace.GotConnInfo{
+				Conn: netConn,
+			})
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if u.Scheme == "https" {
+			cfg := cloneTLSConfig(d.TLSClientConfig)
+			if cfg.ServerName == "" {
+				cfg.ServerName = hostNoPort
+			}
+			tlsConn := tls.Client(netConn, cfg)
+			netConn = tlsConn
+
+			var err error
+			if trace != nil {
+				err = doHandshakeWithTrace(trace, tlsConn, cfg)
+			} else {
+				err = doHandshake(tlsConn, cfg)
+			}
+
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 
