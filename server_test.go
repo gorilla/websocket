@@ -7,8 +7,10 @@ package websocket
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
@@ -116,4 +118,75 @@ func TestBufioReuse(t *testing.T) {
 			t.Errorf("%d: write buffer reuse=%v, want %v", i, reuse, tt.reuse)
 		}
 	}
+}
+
+var negotiateSubprotocolTests = []struct {
+	*Upgrader
+	match     bool
+	shouldErr bool
+}{
+	{
+		&Upgrader{
+			NegotiateSubprotocol: func(r *http.Request) (s string, err error) { return "json", nil },
+		}, true, false,
+	},
+	{
+		&Upgrader{
+			Subprotocols: []string{"json"},
+		}, true, false,
+	},
+	{
+		&Upgrader{
+			Subprotocols: []string{"not-match"},
+		}, false, false,
+	},
+	{
+		&Upgrader{
+			NegotiateSubprotocol: func(r *http.Request) (s string, err error) { return "", errors.New("not-match") },
+		}, false, true,
+	},
+}
+
+func TestNegotiateSubprotocol(t *testing.T) {
+	for i := range negotiateSubprotocolTests {
+		upgrade := negotiateSubprotocolTests[i].Upgrader
+
+		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			upgrade.Upgrade(w, r, nil)
+		}))
+
+		req, err := http.NewRequest("GET", s.URL, strings.NewReader(""))
+		if err != nil {
+			t.Fatalf("NewRequest retuened error %v", err)
+		}
+
+		req.Header.Set("Connection", "upgrade")
+		req.Header.Set("Upgrade", "websocket")
+		req.Header.Set("Sec-Websocket-Version", "13")
+		req.Header.Set("Sec-Websocket-Protocol", "json")
+		req.Header.Set("Sec-Websocket-key", "dGhlIHNhbXBsZSBub25jZQ==")
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("Do returned error %v", err)
+		}
+
+		if negotiateSubprotocolTests[i].shouldErr && resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("The expecred status code is %d,actual status code is %d", http.StatusBadRequest, resp.StatusCode)
+		} else {
+			if negotiateSubprotocolTests[i].match {
+				protocol := resp.Header.Get("Sec-Websocket-Protocol")
+				if protocol != "json" {
+					t.Errorf("Negotiation protocol failed,request protocol is json,reponese protocol is %s", protocol)
+				}
+			} else {
+				if _, ok := resp.Header["Sec-Websocket-Protocol"]; ok {
+					t.Errorf("Negotiation protocol failed,Sec-Websocket-Protocol field should be empty")
+				}
+			}
+		}
+		s.Close()
+		resp.Body.Close()
+	}
+
 }
