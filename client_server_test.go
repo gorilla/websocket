@@ -481,6 +481,23 @@ func TestBadMethod(t *testing.T) {
 	}
 }
 
+func TestDialExtraTokensInRespHeaders(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		challengeKey := r.Header.Get("Sec-Websocket-Key")
+		w.Header().Set("Upgrade", "foo, websocket")
+		w.Header().Set("Connection", "upgrade, keep-alive")
+		w.Header().Set("Sec-Websocket-Accept", computeAcceptKey(challengeKey))
+		w.WriteHeader(101)
+	}))
+	defer s.Close()
+
+	ws, _, err := cstDialer.Dial(makeWsProto(s.URL), nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer ws.Close()
+}
+
 func TestHandshake(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()
