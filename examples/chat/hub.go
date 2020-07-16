@@ -8,6 +8,7 @@ package main
 // clients.
 type Hub struct {
 	// Registered clients.
+	// We use a bool here for clarity, but could instead use an empty struct{} to reduce the allocation overhead.
 	clients map[*Client]bool
 
 	// Inbound messages from the clients.
