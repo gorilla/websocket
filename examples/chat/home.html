@@ -12,7 +12,7 @@ window.onload = () => {
         var shouldScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
         // Insert text and not HTML to prevent xss injection
         log.insertAdjacentText('beforeend', `${text} \n`)
-        shouldScroll && log.lastChild.scrollIntoView();
+        shouldScroll && ( log.scrollTop = log.scrollHeight - log.clientHeight )
     }
 
     document.getElementById("form").onsubmit = () => {
