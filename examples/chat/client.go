@@ -5,11 +5,9 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -30,8 +28,8 @@ const (
 )
 
 var (
-	newline = []byte{'\n'}
-	space   = []byte{' '}
+	newline = "\n"
+	space   = " "
 )
 
 var upgrader = websocket.Upgrader{
@@ -78,15 +76,11 @@ func (c *Client) readPump() {
 			}
 			break
 		}
+		message.Body = strings.TrimSpace(strings.Replace(message.Body, newline, space, -1))
 		// The message sent by the client is now decoded into the message variable
 		// This is when you can perform database calls, validations, or other logic
 		// db.Insert(...)
-		data, err := json.Marshal(message)
-		if err != nil {
-			log.Print(fmt.Sprint("Error while marshalling message:", err))
-		}
-		data = bytes.TrimSpace(bytes.Replace(data, newline, space, -1))
-		c.hub.broadcast <- data
+		c.hub.broadcast <- message
 	}
 }
 
@@ -120,7 +114,7 @@ func (c *Client) writePump() {
 			// Add queued chat messages to the current websocket message.
 			n := len(c.send)
 			for i := 0; i < n; i++ {
-				w.Write(newline)
+				w.Write([]byte{' '})
 				w.Write(<-c.send)
 			}
 
