@@ -11,8 +11,7 @@ window.onload = () => {
     const appendLog = (text) => {
         var shouldScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
         // Insert text and not HTML to prevent xss injection
-        log.insertAdjacentText('beforeend', text)
-        log.insertAdjacentHTML('beforeend', '<br>')
+        log.insertAdjacentText('beforeend', `${text} \n`)
         shouldScroll && log.lastChild.scrollIntoView();
     }
 
@@ -60,6 +59,7 @@ body {
     right: 0.5em;
     bottom: 3em;
     overflow: auto;
+    white-space: pre;
 }
 
 #form {
