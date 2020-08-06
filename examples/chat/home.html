@@ -16,12 +16,8 @@ window.onload = () => {
     }
 
     document.getElementById("form").onsubmit = () => {
-        if (!conn) {
-            return false;
-        }
-        if (!msg.value) {
-            return false;
-        }
+        if (!conn) return false;
+        if (!msg.value) return false;
         conn.send(msg.value);
         msg.value = "";
         return false;
@@ -78,10 +74,10 @@ body {
 </style>
 </head>
 <body>
-<div id="log"></div>
-<form id="form">
-    <input type="submit" value="Send" />
-    <input type="text" id="msg" size="64" autofocus />
-</form>
+    <div id="log"></div>
+    <form id="form">
+        <input type="submit" value="Send" />
+        <input type="text" id="msg" size="64" autofocus />
+    </form>
 </body>
 </html>
