@@ -3,19 +3,19 @@
 <head>
 <title>Chat Example</title>
 <script type="text/javascript">
-window.onload = function () {
+window.onload = () => {
     var conn;
     var msg = document.getElementById("msg");
     var log = document.getElementById("log");
 
-    function appendLog(text) {
+    const appendLog = (text) => {
         // Insert text and not HTML to prevent xss injection
         log.insertAdjacentText('beforeend', text)
         log.insertAdjacentHTML('beforeend', '<br>')
         log.lastChild.scrollIntoView();
     }
 
-    document.getElementById("form").onsubmit = function () {
+    document.getElementById("form").onsubmit = () => {
         if (!conn) {
             return false;
         }
@@ -29,14 +29,10 @@ window.onload = function () {
 
     if (window["WebSocket"]) {
         conn = new WebSocket("ws://" + document.location.host + "/ws");
-        conn.onclose = function (evt) {
-            appendLog('***** Connection closed *****');
-        };
-        conn.onmessage = function (evt) {
+        conn.onclose = () => appendLog('***** Connection closed *****');
+        conn.onmessage = (evt) => {
             var messages = evt.data.split('\n');
-            for (var i = 0; i < messages.length; i++) {
-                appendLog(messages[i]);
-            }
+            messages.forEach(m => appendLog(m))
         };
     } else {
         appendLog('***** Your browser does not support WebSockets *****');
