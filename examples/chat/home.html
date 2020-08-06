@@ -8,12 +8,11 @@ window.onload = function () {
     var msg = document.getElementById("msg");
     var log = document.getElementById("log");
 
-    function appendLog(item) {
-        var doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
-        log.appendChild(item);
-        if (doScroll) {
-            log.scrollTop = log.scrollHeight - log.clientHeight;
-        }
+    function appendLog(text) {
+        // Insert text and not HTML to prevent xss injection
+        log.insertAdjacentText('beforeend', text)
+        log.insertAdjacentHTML('beforeend', '<br>')
+        log.lastChild.scrollIntoView();
     }
 
     document.getElementById("form").onsubmit = function () {
@@ -31,22 +30,16 @@ window.onload = function () {
     if (window["WebSocket"]) {
         conn = new WebSocket("ws://" + document.location.host + "/ws");
         conn.onclose = function (evt) {
-            var item = document.createElement("div");
-            item.innerHTML = "<b>Connection closed.</b>";
-            appendLog(item);
+            appendLog('***** Connection closed *****');
         };
         conn.onmessage = function (evt) {
             var messages = evt.data.split('\n');
             for (var i = 0; i < messages.length; i++) {
-                var item = document.createElement("div");
-                item.innerText = messages[i];
-                appendLog(item);
+                appendLog(messages[i]);
             }
         };
     } else {
-        var item = document.createElement("div");
-        item.innerHTML = "<b>Your browser does not support WebSockets.</b>";
-        appendLog(item);
+        appendLog('***** Your browser does not support WebSockets *****');
     }
 };
 </script>
