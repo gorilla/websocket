@@ -6,6 +6,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -48,6 +50,12 @@ type Client struct {
 	send chan []byte
 }
 
+// Message represents a single message from a client
+type Message struct {
+	// The actual message text
+	Body string `json:"body"`
+}
+
 // readPump pumps messages from the websocket connection to the hub.
 //
 // The application runs readPump in a per-connection goroutine. The application
@@ -62,15 +70,23 @@ func (c *Client) readPump() {
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 	for {
-		_, message, err := c.conn.ReadMessage()
+		message := Message{}
+		err := c.conn.ReadJSON(&message)
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
 			}
 			break
 		}
-		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
-		c.hub.broadcast <- message
+		// The message sent by the client is now decoded into the message variable
+		// This is when you can perform database calls, validations, or other logic
+		// db.Insert(...)
+		data, err := json.Marshal(message)
+		if err != nil {
+			log.Print(fmt.Sprint("Error while marshalling message:", err))
+		}
+		data = bytes.TrimSpace(bytes.Replace(data, newline, space, -1))
+		c.hub.broadcast <- data
 	}
 }
 

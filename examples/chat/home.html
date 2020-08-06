@@ -23,7 +23,7 @@ window.onload = function () {
         if (!msg.value) {
             return false;
         }
-        conn.send(msg.value);
+        conn.send(JSON.stringify({ body: msg.value }));
         msg.value = "";
         return false;
     };
@@ -36,7 +36,7 @@ window.onload = function () {
             appendLog(item);
         };
         conn.onmessage = function (evt) {
-            var messages = evt.data.split('\n');
+            var messages = JSON.parse(evt.data).body.split('\n');
             for (var i = 0; i < messages.length; i++) {
                 var item = document.createElement("div");
                 item.innerText = messages[i];
