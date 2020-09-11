@@ -123,7 +123,9 @@ func (u *Upgrader) selectSubprotocol(r *http.Request) string {
 // Upgrade upgrades the HTTP server connection to the WebSocket protocol.
 //
 // The responseHeader is included in the response to the client's upgrade
-// request. Use the responseHeader to specify cookies (Set-Cookie).
+
+// request. Use the responseHeader to specify cookies (Set-Cookie). To specify
+// subprotocols supported by the server, set Upgrader.Subprotocols directly.
 //
 // If the upgrade fails, then Upgrade replies to the client with an HTTP error
 // response.
