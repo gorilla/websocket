@@ -1,76 +1,70 @@
-version: 2.0
+version: 2.1
 
 jobs:
-  # Base test configuration for Go library tests Each distinct version should
-  # inherit this base, and override (at least) the container image used.
-  "test": &test
+  "test":
+    parameters:
+      version:
+        type: string
+        default: "latest"
+      golint:
+        type: boolean
+        default: true
+      modules:
+        type: boolean
+        default: true
+      goproxy:
+        type: string
+        default: ""
     docker:
-      - image: circleci/golang:latest
+      - image: "circleci/golang:<< parameters.version >>"
     working_directory: /go/src/github.com/gorilla/websocket
-    steps: &steps
-      - checkout
-      - run: go version
-      - run: go get -t -v ./...
-      # Only run gofmt, vet & lint against the latest Go version
-      - run: >
-          if [[ "$LATEST" = true ]]; then
-            go get -u golang.org/x/lint/golint
-            golint ./...
-          fi
-      - run: >
-          if [[ "$LATEST" = true ]]; then
-            diff -u <(echo -n) <(gofmt -d .)
-          fi
-      - run: >
-          if [[ "$LATEST" = true ]]; then
-            go vet -v .
-          fi
-      - run: if [[ "$LATEST" = true ]]; then go vet -v .; fi
-      - run: go test -v -race ./...
-
-  "latest":
-    <<: *test
     environment:
-      LATEST: true
-
-  "1.12":
-    <<: *test
-    docker:
-      - image: circleci/golang:1.12
-
-  "1.11":
-    <<: *test
-    docker:
-      - image: circleci/golang:1.11
-
-  "1.10":
-    <<: *test
-    docker:
-      - image: circleci/golang:1.10
-
-  "1.9":
-    <<: *test
-    docker:
-      - image: circleci/golang:1.9
-
-  "1.8":
-    <<: *test
-    docker:
-      - image: circleci/golang:1.8
-
-  "1.7":
-    <<: *test
-    docker:
-      - image: circleci/golang:1.7
+      GO111MODULE: "on"
+      GOPROXY: "<< parameters.goproxy >>"
+    steps:
+      - checkout
+      - run:
+          name: "Print the Go version"
+          command: >
+            go version
+      - run:
+          name: "Fetch dependencies"
+          command: >
+            if [[ << parameters.modules >> = true ]]; then
+              go mod download
+              export GO111MODULE=on
+            else
+              go get -v ./...
+            fi
+      # Only run gofmt, vet & lint against the latest Go version
+      - run:
+          name: "Run golint"
+          command: >
+            if [ << parameters.version >> = "latest" ] && [ << parameters.golint >> = true ]; then
+              go get -u golang.org/x/lint/golint
+              golint ./...
+            fi
+      - run:
+          name: "Run gofmt"
+          command: >
+            if [[ << parameters.version >> = "latest" ]]; then
+              diff -u <(echo -n) <(gofmt -d -e .)
+            fi
+      - run:
+          name: "Run go vet"
+          command: >
+            if [[ << parameters.version >> = "latest" ]]; then
+              go vet -v ./...
+            fi
+      - run:
+          name: "Run go test (+ race detector)"
+          command: >
+            go test -v -race ./...
 
 workflows:
-  version: 2
-  build:
+  tests:
     jobs:
-      - "latest"
-      - "1.12"
-      - "1.11"
-      - "1.10"
-      - "1.9"
-      - "1.8"
-      - "1.7"
+      - test:
+          matrix:
+            parameters:
+              version: ["latest", "1.15", "1.14", "1.13", "1.12", "1.11"]
