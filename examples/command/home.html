@@ -9,10 +9,10 @@ window.onload = function () {
     var log = document.getElementById("log");
 
     function appendLog(item) {
-        var doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
         log.appendChild(item);
-        if (doScroll) {
-            log.scrollTop = log.scrollHeight - log.clientHeight;
+        let scrollTop = log.scrollHeight - log.clientHeight
+        if (scrollTop > 0) {
+            log.scrollTop = scrollTop
         }
     }
 
