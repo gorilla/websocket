@@ -8,6 +8,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"net/url"
 	"os"
@@ -26,7 +27,7 @@ func main() {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	u := url.URL{Scheme: "ws", Host: *addr, Path: "/echo"}
+	u := url.URL{Scheme: "ws", Host: *addr, Path: "/"}
 	log.Printf("connecting to %s", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
@@ -52,12 +53,23 @@ func main() {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
+	counter := 0
+	msgTicker := time.NewTicker(3 * time.Second)
+	defer msgTicker.Stop()
+
 	for {
 		select {
 		case <-done:
 			return
 		case t := <-ticker.C:
 			err := c.WriteMessage(websocket.TextMessage, []byte(t.String()))
+			if err != nil {
+				log.Println("write:", err)
+				return
+			}
+		case <-msgTicker.C:
+			counter++
+			err := c.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("test message %d", counter)))
 			if err != nil {
 				log.Println("write:", err)
 				return
