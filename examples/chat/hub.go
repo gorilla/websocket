@@ -8,7 +8,7 @@ package main
 // clients.
 type Hub struct {
 	// Registered clients.
-	clients map[*Client]bool
+	clients map[*Client]struct{}
 
 	// Inbound messages from the clients.
 	broadcast chan []byte
@@ -22,10 +22,10 @@ type Hub struct {
 
 func newHub() *Hub {
 	return &Hub{
+		clients:    make(map[*Client]struct{}),
 		broadcast:  make(chan []byte),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
 	}
 }
 
@@ -33,7 +33,7 @@ func (h *Hub) run() {
 	for {
 		select {
 		case client := <-h.register:
-			h.clients[client] = true
+			h.clients[client] = struct{}{}
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
