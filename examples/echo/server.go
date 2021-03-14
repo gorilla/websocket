@@ -69,6 +69,7 @@ window.addEventListener("load", function(evt) {
         var d = document.createElement("div");
         d.textContent = message;
         output.appendChild(d);
+        output.scroll(0, output.scrollHeight);
     };
 
     document.getElementById("open").onclick = function(evt) {
@@ -126,7 +127,7 @@ You can change the message and send multiple times.
 <button id="send">Send</button>
 </form>
 </td><td valign="top" width="50%">
-<div id="output"></div>
+<div id="output" style="max-height: 70vh;overflow-y: scroll;"></div>
 </td></tr></table>
 </body>
 </html>
