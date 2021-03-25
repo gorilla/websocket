@@ -240,7 +240,9 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		netConn.SetWriteDeadline(time.Now().Add(u.HandshakeTimeout))
 	}
 	if _, err = netConn.Write(p); err != nil {
-		netConn.Close()
+		// we need to use our own connection object here since we need it to
+		// shut down the flush thread ( if there is one )
+		c.CloseWithoutFlush()
 		return nil, err
 	}
 	if u.HandshakeTimeout > 0 {
