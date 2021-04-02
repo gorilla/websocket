@@ -1160,9 +1160,32 @@ func (c *Conn) SetPongHandler(h func(appData string) error) {
 	c.handlePong = h
 }
 
+// unbufferConn wraps underlying connection to give readers access to buffered unprocessed data
+type unbufferConn struct {
+	net.Conn
+	br *bufio.Reader
+}
+
+func (uc *unbufferConn) Read(b []byte) (n int, err error) {
+	if n := uc.br.Buffered(); n > 0 {
+		if n > len(b) {
+			n = len(b)
+		}
+		return uc.br.Read(b[0:n])
+	}
+
+	return uc.Conn.Read(b)
+}
+
 // UnderlyingConn returns the internal net.Conn. This can be used to further
 // modifications to connection specific flags.
 func (c *Conn) UnderlyingConn() net.Conn {
+	if c.br.Buffered() > 0 {
+		return &unbufferConn{
+			Conn: c.conn,
+			br:   c.br,
+		}
+	}
 	return c.conn
 }
 

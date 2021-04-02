@@ -572,6 +572,32 @@ func TestUnderlyingConn(t *testing.T) {
 	}
 }
 
+func TestUnbufferConn(t *testing.T) {
+	var b1, b2 bytes.Buffer
+	b1.WriteString("Conn")
+	fc := fakeNetConn{Reader: &b1, Writer: &b2}
+	br := bufio.NewReader(bytes.NewBufferString("Buffered"))
+	_, _ = br.Peek(8)
+	c := newConn(fc, true, 1024, 1024, nil, br, nil)
+
+	ul := c.UnderlyingConn()
+	if ul == fc {
+		t.Fatalf("Underlying conn didn't handle buffered data.")
+	}
+
+	buf := make([]byte, 12)
+	n, err := io.ReadAtLeast(ul, buf, 12)
+	if err != nil {
+		t.Fatalf("Unxpected read error: %v", err)
+	}
+	if n != 12 {
+		t.Fatalf("Unxpected 12 bytes, got %d", n)
+	}
+	if string(buf) != "BufferedConn" {
+		t.Fatalf("Unxpected data %q", buf)
+	}
+}
+
 func TestBufioReadBytes(t *testing.T) {
 	// Test calling bufio.ReadBytes for value longer than read buffer size.
 
