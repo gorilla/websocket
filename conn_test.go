@@ -7,6 +7,7 @@ package websocket
 import (
 	"bufio"
 	"bytes"
+	"compress/flate"
 	"errors"
 	"fmt"
 	"io"
@@ -87,20 +88,50 @@ func TestFraming(t *testing.T) {
 		}},
 	}
 
-	for _, compress := range []bool{false, true} {
+	compressConditions := []struct {
+		compress        bool
+		contextTakeover bool
+	}{
+		{
+			compress:        false,
+			contextTakeover: false,
+		},
+		{
+			compress:        true,
+			contextTakeover: false,
+		},
+		{
+			compress:        true,
+			contextTakeover: true,
+		},
+	}
+
+	for _, compressCondition := range compressConditions {
 		for _, isServer := range []bool{true, false} {
 			for _, chunker := range readChunkers {
 
 				var connBuf bytes.Buffer
 				wc := newTestConn(nil, &connBuf, isServer)
 				rc := newTestConn(chunker.f(&connBuf), nil, !isServer)
-				if compress {
+				switch {
+				case compressCondition.compress && compressCondition.contextTakeover:
+
+					var wf contextTakeoverWriterFactory
+					wf.fw, _ = flate.NewWriter(&wf.tw, defaultCompressionLevel)
+					wc.newCompressionWriter = wf.newCompressionWriter
+
+					var rf contextTakeoverReaderFactory
+					fr := flate.NewReader(nil)
+					rf.fr = fr
+					rc.newDecompressionReader = rf.newDeCompressionReader
+
+				case compressCondition.compress:
 					wc.newCompressionWriter = compressNoContextTakeover
 					rc.newDecompressionReader = decompressNoContextTakeover
 				}
 				for _, n := range frameSizes {
 					for _, writer := range writers {
-						name := fmt.Sprintf("z:%v, s:%v, r:%s, n:%d w:%s", compress, isServer, chunker.name, n, writer.name)
+						name := fmt.Sprintf("z:%v, c:%v, s:%v, r:%s, n:%d w:%s", compressCondition.compress, compressCondition.contextTakeover, isServer, chunker.name, n, writer.name)
 
 						w, err := wc.NextWriter(TextMessage)
 						if err != nil {

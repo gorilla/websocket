@@ -6,6 +6,7 @@ package websocket
 
 import (
 	"bytes"
+	"compress/flate"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -89,16 +90,19 @@ type Dialer struct {
 	// Subprotocols specifies the client's requested subprotocols.
 	Subprotocols []string
 
-	// EnableCompression specifies if the client should attempt to negotiate
-	// per message compression (RFC 7692). Setting this value to true does not
-	// guarantee that compression will be supported. Currently only "no context
-	// takeover" modes are supported.
+	// EnableCompression specify if the server should attempt to negotiate per
+	// message compression (RFC 7692).
 	EnableCompression bool
 
 	// Jar specifies the cookie jar.
 	// If Jar is nil, cookies are not sent in requests and ignored
 	// in responses.
 	Jar http.CookieJar
+
+	// AllowClientContextTakeover specifies whether the server will negotiate client context
+	// takeover for per message compression. Context takeover improves compression at the
+	// the cost of using more memory.
+	AllowClientContextTakeover bool
 }
 
 // Dial creates a new client connection by calling DialContext with a background context.
@@ -224,8 +228,11 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		}
 	}
 
-	if d.EnableCompression {
-		req.Header["Sec-WebSocket-Extensions"] = []string{"permessage-deflate; server_no_context_takeover; client_no_context_takeover"}
+	switch {
+	case d.EnableCompression && d.AllowClientContextTakeover:
+		req.Header.Set("Sec-Websocket-Extensions", "permessage-deflate; server_max_window_bits=15; client_max_window_bits=15")
+	case d.EnableCompression:
+		req.Header.Set("Sec-Websocket-Extensions", "permessage-deflate; server_no_context_takeover; client_no_context_takeover")
 	}
 
 	if d.HandshakeTimeout != 0 {
@@ -364,13 +371,24 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		if ext[""] != "permessage-deflate" {
 			continue
 		}
-		_, snct := ext["server_no_context_takeover"]
-		_, cnct := ext["client_no_context_takeover"]
-		if !snct || !cnct {
-			return nil, resp, errInvalidCompression
+
+		_, cmwb := ext["client_max_window_bits"]
+		_, smwb := ext["server_max_window_bits"]
+
+		switch {
+		case cmwb && smwb:
+			var wf contextTakeoverWriterFactory
+			conn.newCompressionWriter = wf.newCompressionWriter
+
+			var rf contextTakeoverReaderFactory
+			fr := flate.NewReader(nil)
+			rf.fr = fr
+			conn.newDecompressionReader = rf.newDeCompressionReader
+		default:
+			conn.newCompressionWriter = compressNoContextTakeover
+			conn.newDecompressionReader = decompressNoContextTakeover
 		}
-		conn.newCompressionWriter = compressNoContextTakeover
-		conn.newDecompressionReader = decompressNoContextTakeover
+
 		break
 	}
 

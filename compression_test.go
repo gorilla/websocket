@@ -65,6 +65,20 @@ func BenchmarkWriteWithCompression(b *testing.B) {
 	b.ReportAllocs()
 }
 
+func BenchmarkWriteWithCompressionOfContextTakeover(b *testing.B) {
+	w := ioutil.Discard
+	c := newTestConn(nil, w, false)
+	messages := textMessages(100)
+	c.enableWriteCompression = true
+	var f contextTakeoverWriterFactory
+	c.newCompressionWriter = f.newCompressionWriter
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.WriteMessage(TextMessage, messages[i%len(messages)])
+	}
+	b.ReportAllocs()
+}
+
 func TestValidCompressionLevel(t *testing.T) {
 	c := newTestConn(nil, nil, false)
 	for _, level := range []int{minCompressionLevel - 1, maxCompressionLevel + 1} {

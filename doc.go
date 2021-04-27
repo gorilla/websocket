@@ -218,10 +218,17 @@
 //
 //  conn.EnableWriteCompression(false)
 //
-// Currently this package does not support compression with "context takeover".
+// Currently this package supports compression with "context takeover".
 // This means that messages must be compressed and decompressed in isolation,
 // without retaining sliding window or dictionary state across messages. For
 // more details refer to RFC 7692.
+//
+// If you want to use it, please do as follows.
+//
+// var upgrader = websocket.Upgrader{
+//      EnableCompression:     true,
+//      AllowServerContextTakeover: true,
+// }
 //
 // Use of compression is experimental and may result in decreased performance.
 package websocket

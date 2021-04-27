@@ -38,6 +38,8 @@ const (
 
 	continuationFrame = 0
 	noFrame           = -1
+
+	maxWindowBits = 1 << 15
 )
 
 // Close codes defined in RFC 6455, section 11.7.
