@@ -18,7 +18,6 @@ import (
 // scenarios with many subscribers in one channel.
 type broadcastBench struct {
 	w           io.Writer
-	message     *broadcastMessage
 	closeCh     chan struct{}
 	doneCh      chan struct{}
 	count       int32
@@ -52,14 +51,6 @@ func newBroadcastBench(usePrepared, compression bool) *broadcastBench {
 		usePrepared: usePrepared,
 		compression: compression,
 	}
-	msg := &broadcastMessage{
-		payload: textMessages(1)[0],
-	}
-	if usePrepared {
-		pm, _ := NewPreparedMessage(TextMessage, msg.payload)
-		msg.prepared = pm
-	}
-	bench.message = msg
 	bench.makeConns(10000)
 	return bench
 }
@@ -78,7 +69,7 @@ func (b *broadcastBench) makeConns(numConns int) {
 			for {
 				select {
 				case msg := <-c.msgCh:
-					if b.usePrepared {
+					if msg.prepared != nil {
 						c.conn.WritePreparedMessage(msg.prepared)
 					} else {
 						c.conn.WriteMessage(TextMessage, msg.payload)
@@ -100,9 +91,9 @@ func (b *broadcastBench) close() {
 	close(b.closeCh)
 }
 
-func (b *broadcastBench) runOnce() {
+func (b *broadcastBench) broadcastOnce(msg *broadcastMessage) {
 	for _, c := range b.conns {
-		c.msgCh <- b.message
+		c.msgCh <- msg
 	}
 	<-b.doneCh
 }
@@ -114,17 +105,25 @@ func BenchmarkBroadcast(b *testing.B) {
 		compression bool
 	}{
 		{"NoCompression", false, false},
-		{"WithCompression", false, true},
+		{"Compression", false, true},
 		{"NoCompressionPrepared", true, false},
-		{"WithCompressionPrepared", true, true},
+		{"CompressionPrepared", true, true},
 	}
+	payload := textMessages(1)[0]
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			bench := newBroadcastBench(bm.usePrepared, bm.compression)
 			defer bench.close()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				bench.runOnce()
+				message := &broadcastMessage{
+					payload: payload,
+				}
+				if bench.usePrepared {
+					pm, _ := NewPreparedMessage(TextMessage, message.payload)
+					message.prepared = pm
+				}
+				bench.broadcastOnce(message)
 			}
 			b.ReportAllocs()
 		})
