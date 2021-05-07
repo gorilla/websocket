@@ -132,6 +132,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		internalError(ws, "start:", err)
 		return
 	}
+	defer proc.Kill()
 
 	inr.Close()
 	outw.Close()
