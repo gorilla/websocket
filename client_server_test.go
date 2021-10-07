@@ -163,7 +163,7 @@ func TestProxyDial(t *testing.T) {
 	// Capture the request Host header.
 	s.Server.Config.Handler = http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == "CONNECT" {
+			if r.Method == http.MethodConnect {
 				connect = true
 				w.WriteHeader(http.StatusOK)
 				return
@@ -203,7 +203,7 @@ func TestProxyAuthorizationDial(t *testing.T) {
 		func(w http.ResponseWriter, r *http.Request) {
 			proxyAuth := r.Header.Get("Proxy-Authorization")
 			expectedProxyAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte("username:password"))
-			if r.Method == "CONNECT" && proxyAuth == expectedProxyAuth {
+			if r.Method == http.MethodConnect && proxyAuth == expectedProxyAuth {
 				connect = true
 				w.WriteHeader(http.StatusOK)
 				return
@@ -463,7 +463,7 @@ func TestBadMethod(t *testing.T) {
 	}))
 	defer s.Close()
 
-	req, err := http.NewRequest("POST", s.URL, strings.NewReader(""))
+	req, err := http.NewRequest(http.MethodPost, s.URL, strings.NewReader(""))
 	if err != nil {
 		t.Fatalf("NewRequest returned error %v", err)
 	}
@@ -735,7 +735,7 @@ func TestHost(t *testing.T) {
 			Dial:            dialer.NetDial,
 			TLSClientConfig: dialer.TLSClientConfig,
 		}
-		req, _ := http.NewRequest("GET", httpProtos[tt.server]+tt.url+"/", nil)
+		req, _ := http.NewRequest(http.MethodGet, httpProtos[tt.server]+tt.url+"/", nil)
 		if tt.header != "" {
 			req.Host = tt.header
 		}
