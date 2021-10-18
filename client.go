@@ -314,9 +314,9 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 
 		var err error
 		if trace != nil {
-			err = doHandshakeWithTrace(trace, tlsConn, cfg)
+			err = doHandshakeWithTrace(ctx, trace, tlsConn, cfg)
 		} else {
-			err = doHandshake(tlsConn, cfg)
+			err = doHandshake(ctx, tlsConn, cfg)
 		}
 
 		if err != nil {
@@ -380,16 +380,4 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 	netConn.SetDeadline(time.Time{})
 	netConn = nil // to avoid close in defer.
 	return conn, resp, nil
-}
-
-func doHandshake(tlsConn *tls.Conn, cfg *tls.Config) error {
-	if err := tlsConn.Handshake(); err != nil {
-		return err
-	}
-	if !cfg.InsecureSkipVerify {
-		if err := tlsConn.VerifyHostname(cfg.ServerName); err != nil {
-			return err
-		}
-	}
-	return nil
 }
