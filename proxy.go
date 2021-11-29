@@ -6,7 +6,6 @@ package websocket
 
 import (
 	"bufio"
-	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"net"
@@ -21,20 +20,12 @@ func (fn netDialerFunc) Dial(network, addr string) (net.Conn, error) {
 	return fn(network, addr)
 }
 
-type tlsDialer struct {
-}
-
-func (t *tlsDialer) Dial(network, addr string) (c net.Conn, err error) {
-	return tls.DialWithDialer(&net.Dialer{}, network, addr, &tls.Config{})
-}
-
 func init() {
 	proxy_RegisterDialerType("http", func(proxyURL *url.URL, forwardDialer proxy_Dialer) (proxy_Dialer, error) {
 		return &httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDialer.Dial}, nil
 	})
 	proxy_RegisterDialerType("https", func(proxyURL *url.URL, forwardDialer proxy_Dialer) (proxy_Dialer, error) {
-		dialer := &tlsDialer{}
-		return &httpProxyDialer{proxyURL: proxyURL, forwardDial: dialer.Dial}, nil
+		return &httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDialer.Dial}, nil
 	})
 }
 
