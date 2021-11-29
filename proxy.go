@@ -6,6 +6,7 @@ package websocket
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"net"
@@ -14,24 +15,40 @@ import (
 	"strings"
 )
 
-type netDialerFunc func(network, addr string) (net.Conn, error)
+type netDialerFunc struct {
+	fn      func(network, addr string) (net.Conn, error)
+	usesTLS bool
+}
 
-func (fn netDialerFunc) Dial(network, addr string) (net.Conn, error) {
-	return fn(network, addr)
+func (ndf *netDialerFunc) Dial(network, addr string) (net.Conn, error) {
+	return ndf.fn(network, addr)
+}
+
+func (ndf *netDialerFunc) UsesTLS() bool {
+	return ndf.usesTLS
 }
 
 func init() {
 	proxy_RegisterDialerType("http", func(proxyURL *url.URL, forwardDialer proxy_Dialer) (proxy_Dialer, error) {
-		return &httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDialer.Dial}, nil
+		return &httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDialer.Dial, usesTLS: forwardDialer.UsesTLS()}, nil
 	})
 	proxy_RegisterDialerType("https", func(proxyURL *url.URL, forwardDialer proxy_Dialer) (proxy_Dialer, error) {
-		return &httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDialer.Dial}, nil
+		fwd := forwardDialer.Dial
+		if !forwardDialer.UsesTLS() {
+			tlsDialer := &tls.Dialer{
+				Config:    &tls.Config{},
+				NetDialer: &net.Dialer{},
+			}
+			fwd = tlsDialer.Dial
+		}
+		return &httpProxyDialer{proxyURL: proxyURL, forwardDial: fwd, usesTLS: true}, nil
 	})
 }
 
 type httpProxyDialer struct {
 	proxyURL    *url.URL
 	forwardDial func(network, addr string) (net.Conn, error)
+	usesTLS     bool
 }
 
 func (hpd *httpProxyDialer) Dial(network string, addr string) (net.Conn, error) {
@@ -77,4 +94,8 @@ func (hpd *httpProxyDialer) Dial(network string, addr string) (net.Conn, error) 
 		return nil, errors.New(f[1])
 	}
 	return conn, nil
+}
+
+func (hpd *httpProxyDialer) UsesTLS() bool {
+	return hpd.usesTLS
 }
