@@ -27,10 +27,6 @@ func (proxy_direct) Dial(network, addr string) (net.Conn, error) {
 	return net.Dial(network, addr)
 }
 
-func (proxy_direct) UsesTLS() bool {
-	return false
-}
-
 // A PerHost directs connections to a default Dialer unless the host name
 // requested matches one of a number of exceptions.
 type proxy_PerHost struct {
@@ -61,10 +57,6 @@ func (p *proxy_PerHost) Dial(network, addr string) (c net.Conn, err error) {
 	}
 
 	return p.dialerForRequest(host).Dial(network, addr)
-}
-
-func (p *proxy_PerHost) UsesTLS() bool {
-	return p.def.UsesTLS() || p.bypass.UsesTLS()
 }
 
 func (p *proxy_PerHost) dialerForRequest(host string) proxy_Dialer {
@@ -169,8 +161,6 @@ func (p *proxy_PerHost) AddHost(host string) {
 type proxy_Dialer interface {
 	// Dial connects to the given address via the proxy.
 	Dial(network, addr string) (c net.Conn, err error)
-	// UsesTLS indicates whether we expect to dial to a TLS proxy
-	UsesTLS() bool
 }
 
 // Auth contains authentication parameters that specific Dialers may require.
@@ -346,10 +336,6 @@ func (s *proxy_socks5) Dial(network, addr string) (net.Conn, error) {
 		return nil, err
 	}
 	return conn, nil
-}
-
-func (s *proxy_socks5) UsesTLS() bool {
-	return s.forward.UsesTLS()
 }
 
 // connect takes an existing connection to a socks5 proxy server,

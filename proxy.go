@@ -15,6 +15,13 @@ import (
 	"strings"
 )
 
+// // proxyDialerEx extends the generated proxy_Dialer
+type proxyDialerEx interface {
+	proxy_Dialer
+	// UsesTLS indicates whether we expect to dial to a TLS proxy
+	UsesTLS() bool
+}
+
 type netDialerFunc struct {
 	fn      func(network, addr string) (net.Conn, error)
 	usesTLS bool
@@ -30,11 +37,11 @@ func (ndf *netDialerFunc) UsesTLS() bool {
 
 func init() {
 	proxy_RegisterDialerType("http", func(proxyURL *url.URL, forwardDialer proxy_Dialer) (proxy_Dialer, error) {
-		return &httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDialer.Dial, usesTLS: forwardDialer.UsesTLS()}, nil
+		return &httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDialer.Dial, usesTLS: false}, nil
 	})
 	proxy_RegisterDialerType("https", func(proxyURL *url.URL, forwardDialer proxy_Dialer) (proxy_Dialer, error) {
 		fwd := forwardDialer.Dial
-		if !forwardDialer.UsesTLS() {
+		if dialerEx, ok := forwardDialer.(proxyDialerEx); !ok || !dialerEx.UsesTLS() {
 			tlsDialer := &tls.Dialer{
 				Config:    &tls.Config{},
 				NetDialer: &net.Dialer{},
