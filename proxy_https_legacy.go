@@ -11,5 +11,4 @@ func registerDialerHttps() {
 }
 
 func modifyProxyDialer(ctx context.Context, d *Dialer, proxyURL *url.URL, proxyDialer *netDialerFunc) {
-	return nil
 }
