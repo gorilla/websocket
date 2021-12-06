@@ -275,15 +275,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		}
 		if proxyURL != nil {
 			proxyDialer := &netDialerFunc{fn: netDial}
-			if proxyURL.Scheme == "https" {
-				proxyDialer.usesTLS = true
-				proxyDialer.fn = func(network, addr string) (net.Conn, error) {
-					t := tls.Dialer{}
-					t.Config = d.TLSClientConfig
-					t.NetDialer = &net.Dialer{}
-					return t.DialContext(ctx, network, addr)
-				}
-			}
+			modifyProxyDialer(ctx, d, proxyURL, proxyDialer)
 			dialer, err := proxy_FromURL(proxyURL, proxyDialer)
 			if err != nil {
 				return nil, nil, err
