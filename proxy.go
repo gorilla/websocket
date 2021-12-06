@@ -15,7 +15,7 @@ import (
 	"strings"
 )
 
-// // proxyDialerEx extends the generated proxy_Dialer
+// proxyDialerEx extends the generated proxy_Dialer
 type proxyDialerEx interface {
 	proxy_Dialer
 	// UsesTLS indicates whether we expect to dial to a TLS proxy
