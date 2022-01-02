@@ -384,3 +384,10 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 	netConn = nil // to avoid close in defer.
 	return conn, resp, nil
 }
+
+func cloneTLSConfig(cfg *tls.Config) *tls.Config {
+	if cfg == nil {
+		return &tls.Config{}
+	}
+	return cfg.Clone()
+}
