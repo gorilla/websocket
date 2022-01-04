@@ -56,8 +56,14 @@ type Dialer struct {
 	NetDial func(network, addr string) (net.Conn, error)
 
 	// NetDialContext specifies the dial function for creating TCP connections. If
-	// NetDialContext is nil, net.DialContext is used.
+	// NetDialContext is nil, NetDial is used.
 	NetDialContext func(ctx context.Context, network, addr string) (net.Conn, error)
+
+	// NetDialTLSContext specifies the dial function for creating TLS/TCP connections. If
+	// NetDialTLSContext is nil, NetDialContext is used.
+	// If NetDialTLSContext is set, Dial assumes the TLS handshake is done there and
+	// TLSClientConfig is ignored.
+	NetDialTLSContext func(ctx context.Context, network, addr string) (net.Conn, error)
 
 	// Proxy specifies a function to return a proxy for a given
 	// Request. If the function returns a non-nil error, the
@@ -67,6 +73,8 @@ type Dialer struct {
 
 	// TLSClientConfig specifies the TLS configuration to use with tls.Client.
 	// If nil, the default configuration is used.
+	// If either NetDialTLS or NetDialTLSContext are set, Dial assumes the TLS handshake
+	// is done there and TLSClientConfig is ignored.
 	TLSClientConfig *tls.Config
 
 	// HandshakeTimeout specifies the duration for the handshake to complete.
@@ -239,13 +247,32 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 	// Get network dial function.
 	var netDial func(network, add string) (net.Conn, error)
 
-	if d.NetDialContext != nil {
-		netDial = func(network, addr string) (net.Conn, error) {
-			return d.NetDialContext(ctx, network, addr)
+	switch u.Scheme {
+	case "http":
+		if d.NetDialContext != nil {
+			netDial = func(network, addr string) (net.Conn, error) {
+				return d.NetDialContext(ctx, network, addr)
+			}
+		} else if d.NetDial != nil {
+			netDial = d.NetDial
 		}
-	} else if d.NetDial != nil {
-		netDial = d.NetDial
-	} else {
+	case "https":
+		if d.NetDialTLSContext != nil {
+			netDial = func(network, addr string) (net.Conn, error) {
+				return d.NetDialTLSContext(ctx, network, addr)
+			}
+		} else if d.NetDialContext != nil {
+			netDial = func(network, addr string) (net.Conn, error) {
+				return d.NetDialContext(ctx, network, addr)
+			}
+		} else if d.NetDial != nil {
+			netDial = d.NetDial
+		}
+	default:
+		return nil, nil, errMalformedURL
+	}
+
+	if netDial == nil {
 		netDialer := &net.Dialer{}
 		netDial = func(network, addr string) (net.Conn, error) {
 			return netDialer.DialContext(ctx, network, addr)
@@ -306,7 +333,9 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		}
 	}()
 
-	if u.Scheme == "https" {
+	if u.Scheme == "https" && d.NetDialTLSContext == nil {
+		// If NetDialTLSContext is set, assume that the TLS handshake has already been done
+
 		cfg := cloneTLSConfig(d.TLSClientConfig)
 		if cfg.ServerName == "" {
 			cfg.ServerName = hostNoPort
