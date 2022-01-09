@@ -20,6 +20,7 @@ Gorilla WebSocket is a [Go](http://golang.org/) implementation of the
 * [Command example](https://github.com/gorilla/websocket/tree/master/examples/command)
 * [Client and server example](https://github.com/gorilla/websocket/tree/master/examples/echo)
 * [File watch example](https://github.com/gorilla/websocket/tree/master/examples/filewatch)
+* [Write buffer pool example](https://github.com/gorilla/websocket/tree/master/examples/bufferpool)
 
 ### Status
 
