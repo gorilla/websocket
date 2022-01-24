@@ -245,13 +245,12 @@ type Conn struct {
 	subprotocol string
 
 	// Write fields
-	mu            chan struct{} // used as mutex to protect write to conn
-	writeBuf      []byte        // frame is constructed in this buffer.
-	writePool     BufferPool
-	writeBufSize  int
-	writeDeadline time.Time
-	writer        io.WriteCloser // the current writer returned to the application
-	isWriting     bool           // for best-effort concurrent write detection
+	mu           chan struct{} // used as mutex to protect write to conn
+	writeBuf     []byte        // frame is constructed in this buffer.
+	writePool    BufferPool
+	writeBufSize int
+	writer       io.WriteCloser // the current writer returned to the application
+	isWriting    bool           // for best-effort concurrent write detection
 
 	writeErrMu sync.Mutex
 	writeErr   error
@@ -376,7 +375,7 @@ func (c *Conn) read(n int) ([]byte, error) {
 	return p, err
 }
 
-func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error {
+func (c *Conn) write(frameType int, buf0, buf1 []byte) error {
 	<-c.mu
 	defer func() { c.mu <- struct{}{} }()
 
@@ -387,7 +386,6 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 		return err
 	}
 
-	c.conn.SetWriteDeadline(deadline)
 	if len(buf1) == 0 {
 		_, err = c.conn.Write(buf0)
 	} else {
@@ -460,7 +458,11 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 		return err
 	}
 
-	c.conn.SetWriteDeadline(deadline)
+	err = c.conn.SetWriteDeadline(deadline)
+	if err != nil {
+		return err
+	}
+
 	_, err = c.conn.Write(buf)
 	if err != nil {
 		return c.writeFatal(err)
@@ -618,7 +620,7 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 	}
 	c.isWriting = true
 
-	err := c.write(w.frameType, c.writeDeadline, c.writeBuf[framePos:w.pos], extra)
+	err := c.write(w.frameType, c.writeBuf[framePos:w.pos], extra)
 
 	if !c.isWriting {
 		panic("concurrent write to websocket connection")
@@ -745,7 +747,7 @@ func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 		panic("concurrent write to websocket connection")
 	}
 	c.isWriting = true
-	err = c.write(frameType, c.writeDeadline, frameData, nil)
+	err = c.write(frameType, frameData, nil)
 	if !c.isWriting {
 		panic("concurrent write to websocket connection")
 	}
@@ -785,8 +787,7 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 // all future writes will return an error. A zero value for t means writes will
 // not time out.
 func (c *Conn) SetWriteDeadline(t time.Time) error {
-	c.writeDeadline = t
-	return nil
+	return c.conn.SetWriteDeadline(t)
 }
 
 // Read methods
