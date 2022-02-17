@@ -98,7 +98,7 @@ func TestBufioReuse(t *testing.T) {
 		}
 		upgrader := Upgrader{}
 		c, err := upgrader.Upgrade(resp, &http.Request{
-			Method: "GET",
+			Method: http.MethodGet,
 			Header: http.Header{
 				"Upgrade":               []string{"websocket"},
 				"Connection":            []string{"upgrade"},

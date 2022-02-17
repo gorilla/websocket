@@ -53,6 +53,25 @@ func TestTokenListContainsValue(t *testing.T) {
 	}
 }
 
+var isValidChallengeKeyTests = []struct {
+	key string
+	ok  bool
+}{
+	{"dGhlIHNhbXBsZSBub25jZQ==", true},
+	{"", false},
+	{"InvalidKey", false},
+	{"WHQ4eXhscUtKYjBvOGN3WEdtOEQ=", false},
+}
+
+func TestIsValidChallengeKey(t *testing.T) {
+	for _, tt := range isValidChallengeKeyTests {
+		ok := isValidChallengeKey(tt.key)
+		if ok != tt.ok {
+			t.Errorf("isValidChallengeKey returns %v, want %v", ok, tt.ok)
+		}
+	}
+}
+
 var parseExtensionTests = []struct {
 	value      string
 	extensions []map[string]string
