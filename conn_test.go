@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"reflect"
 	"sync"
@@ -125,7 +124,7 @@ func TestFraming(t *testing.T) {
 						}
 
 						t.Logf("frame size: %d", n)
-						rbuf, err := ioutil.ReadAll(r)
+						rbuf, err := io.ReadAll(r)
 						if err != nil {
 							t.Errorf("%s: ReadFull() returned rbuf, %v", name, err)
 							continue
@@ -367,7 +366,7 @@ func TestCloseFrameBeforeFinalMessageFrame(t *testing.T) {
 	if op != BinaryMessage || err != nil {
 		t.Fatalf("NextReader() returned %d, %v", op, err)
 	}
-	_, err = io.Copy(ioutil.Discard, r)
+	_, err = io.Copy(io.Discard, r)
 	if !reflect.DeepEqual(err, expectedErr) {
 		t.Fatalf("io.Copy() returned %v, want %v", err, expectedErr)
 	}
@@ -401,7 +400,7 @@ func TestEOFWithinFrame(t *testing.T) {
 		if op != BinaryMessage || err != nil {
 			t.Fatalf("%d: NextReader() returned %d, %v", n, op, err)
 		}
-		_, err = io.Copy(ioutil.Discard, r)
+		_, err = io.Copy(io.Discard, r)
 		if err != errUnexpectedEOF {
 			t.Fatalf("%d: io.Copy() returned %v, want %v", n, err, errUnexpectedEOF)
 		}
@@ -426,7 +425,7 @@ func TestEOFBeforeFinalFrame(t *testing.T) {
 	if op != BinaryMessage || err != nil {
 		t.Fatalf("NextReader() returned %d, %v", op, err)
 	}
-	_, err = io.Copy(ioutil.Discard, r)
+	_, err = io.Copy(io.Discard, r)
 	if err != errUnexpectedEOF {
 		t.Fatalf("io.Copy() returned %v, want %v", err, errUnexpectedEOF)
 	}
@@ -490,7 +489,7 @@ func TestReadLimit(t *testing.T) {
 		if op != BinaryMessage || err != nil {
 			t.Fatalf("2: NextReader() returned %d, %v", op, err)
 		}
-		_, err = io.Copy(ioutil.Discard, r)
+		_, err = io.Copy(io.Discard, r)
 		if err != ErrReadLimit {
 			t.Fatalf("io.Copy() returned %v", err)
 		}
