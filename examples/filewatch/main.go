@@ -7,7 +7,6 @@ package main
 import (
 	"flag"
 	"html/template"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -49,7 +48,7 @@ func readFileIfModified(lastMod time.Time) ([]byte, time.Time, error) {
 	if !fi.ModTime().After(lastMod) {
 		return nil, lastMod, nil
 	}
-	p, err := ioutil.ReadFile(filename)
+	p, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fi.ModTime(), err
 	}
