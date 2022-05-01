@@ -1,0 +1,16 @@
+name: Test
+
+on:
+  push:
+
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: ^1.18
+      - name: Test
+        run:  go test -v -race ./...
