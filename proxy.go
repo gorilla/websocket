@@ -33,7 +33,7 @@ type httpProxyDialer struct {
 
 func (hpd *httpProxyDialer) Dial(network string, addr string) (net.Conn, error) {
 	hostPort, _ := hostPortNoPort(hpd.proxyURL)
-	conn, err := hpd.forwardDial(network, hostPort)
+	conn, err := net.Dial(network, hostPort)
 	if err != nil {
 		return nil, err
 	}
