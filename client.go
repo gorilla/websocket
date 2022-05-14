@@ -343,6 +343,9 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		if d.ProxyTLSConnection != nil && d.Proxy != nil {
 			// If we are connected to a proxy, perform the TLS handshake through the existing tunnel
 			netConn, err = d.ProxyTLSConnection(ctx, netConn)
+			if err != nil {
+				return nil, nil, err
+			}
 		} else if d.NetDialTLSContext == nil {
 			// If NetDialTLSContext is set, assume that the TLS handshake has already been done
 
