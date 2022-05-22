@@ -1236,3 +1236,7 @@ func FormatCloseMessage(closeCode int, text string) []byte {
 	copy(buf[2:], text)
 	return buf
 }
+
+func (c *Conn) WriteText(s string) error {
+	return c.WriteMessage(TextMessage, []byte(s))
+}
