@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -183,6 +184,12 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 	if u.User != nil {
 		// User name and password are not allowed in websocket URIs.
 		return nil, nil, errMalformedURL
+	}
+
+	for _, proto := range d.TLSClientConfig.NextProtos {
+		if proto != "http/1.1" {
+			return nil, nil, fmt.Errorf("protocol %q is currently not supported", proto)
+		}
 	}
 
 	req := &http.Request{
