@@ -186,13 +186,15 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		return nil, nil, errMalformedURL
 	}
 
-	for _, proto := range d.TLSClientConfig.NextProtos {
-		if proto != "http/1.1" {
-			return nil, nil, fmt.Errorf(
-				`protocol %q was given but is not supported;
-				sharing tls.Config with net/http Transport can cause this error`,
-				proto,
-			)
+	if d.TLSClientConfig != nil {
+		for _, proto := range d.TLSClientConfig.NextProtos {
+			if proto != "http/1.1" {
+				return nil, nil, fmt.Errorf(
+					`protocol %q was given but is not supported;
+					sharing tls.Config with net/http Transport can cause this error`,
+					proto,
+				)
+			}
 		}
 	}
 
