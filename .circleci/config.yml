@@ -16,7 +16,7 @@ jobs:
         type: string
         default: ""
     docker:
-      - image: "cimg/golang:<< parameters.version >>"
+      - image: "cimg/go:<< parameters.version >>"
     working_directory: /go/src/github.com/gorilla/websocket
     environment:
       GO111MODULE: "on"
