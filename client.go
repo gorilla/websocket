@@ -376,7 +376,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 				if proto != "http/1.1" {
 					return nil, nil, fmt.Errorf(
 						"websocket: protocol %q was given but is not supported;"+
-							"sharing tls.Config with net/http Transport can cause this error: %w",
+							"sharing tls.Config with net/http Transport can cause this error: %v",
 						proto, err,
 					)
 				}
