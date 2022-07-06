@@ -319,13 +319,13 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 	}
 
 	netConn, err := netDial("tcp", hostPort)
+	if err != nil {
+		return nil, nil, err
+	}
 	if trace != nil && trace.GotConn != nil {
 		trace.GotConn(httptrace.GotConnInfo{
 			Conn: netConn,
 		})
-	}
-	if err != nil {
-		return nil, nil, err
 	}
 
 	defer func() {
