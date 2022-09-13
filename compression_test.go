@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"testing"
 )
 
@@ -42,7 +41,7 @@ func textMessages(num int) [][]byte {
 }
 
 func BenchmarkWriteNoCompression(b *testing.B) {
-	w := ioutil.Discard
+	w := io.Discard
 	c := newTestConn(nil, w, false)
 	messages := textMessages(100)
 	b.ResetTimer()
@@ -53,7 +52,7 @@ func BenchmarkWriteNoCompression(b *testing.B) {
 }
 
 func BenchmarkWriteWithCompression(b *testing.B) {
-	w := ioutil.Discard
+	w := io.Discard
 	c := newTestConn(nil, w, false)
 	messages := textMessages(100)
 	c.enableWriteCompression = true

@@ -59,7 +59,7 @@ func (hpd *httpProxyDialer) Dial(network string, addr string) (net.Conn, error) 
 		return nil, err
 	}
 
-	// Read response. It's OK to use and discard buffered reader here becaue
+	// Read response. It's OK to use and discard buffered reader here because
 	// the remote server does not speak until spoken to.
 	br := bufio.NewReader(conn)
 	resp, err := http.ReadResponse(br, connectReq)
