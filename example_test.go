@@ -5,11 +5,10 @@
 package websocket_test
 
 import (
+	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
 	"testing"
-
-	"github.com/gorilla/websocket"
 )
 
 var (

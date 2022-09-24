@@ -280,6 +280,9 @@ type Conn struct {
 
 	readDecompress         bool // whether last read frame had RSV1 set
 	newDecompressionReader func(io.Reader) io.ReadCloser
+
+	asyncDialDone chan struct{}
+	asyncError    error
 }
 
 func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, writeBufferPool BufferPool, br *bufio.Reader, writeBuf []byte) *Conn {
@@ -1235,4 +1238,18 @@ func FormatCloseMessage(closeCode int, text string) []byte {
 	binary.BigEndian.PutUint16(buf, uint16(closeCode))
 	copy(buf[2:], text)
 	return buf
+}
+
+// AsyncWait wait until websocket handshake is completed when use DialContextAsync
+// this func should be called before conn.Read when use DialContextAsync
+func (c *Conn) AsyncWait() error {
+	if c.asyncDialDone == nil {
+		panic("async wait should not be called without using DialContextAsync")
+	}
+
+	<-c.asyncDialDone
+	if c.asyncError != nil {
+		return c.asyncError
+	}
+	return nil
 }

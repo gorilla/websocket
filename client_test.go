@@ -5,8 +5,12 @@
 package websocket
 
 import (
+	"context"
+	"fmt"
+	"net/http"
 	"net/url"
 	"testing"
+	"time"
 )
 
 var hostPortNoPortTests = []struct {
@@ -28,5 +32,47 @@ func TestHostPortNoPort(t *testing.T) {
 		if hostNoPort != tt.hostNoPort {
 			t.Errorf("hostPortNoPort(%v) returned hostNoPort %q, want %q", tt.u, hostNoPort, tt.hostNoPort)
 		}
+	}
+}
+
+func TestWsServer(t *testing.T) {
+	u := &Upgrader{}
+	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+		conn, err := u.Upgrade(writer, request, nil)
+		if err != nil {
+			writer.Write([]byte(err.Error()))
+			fmt.Println("err upgrade", err)
+			return
+		}
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			fmt.Println("err read message", err)
+			return
+		}
+		conn.WriteMessage(TextMessage, []byte("hello world response："+string(msg)))
+		time.Sleep(1 * time.Second)
+	})
+	http.ListenAndServe(":8888", nil)
+}
+
+func TestAsyncDial(t *testing.T) {
+	conn, err := DefaultDialer.DialContextAsync(context.Background(), "ws://127.0.0.1:8888", nil, nil)
+	if err != nil {
+		panic(err)
+	}
+	conn.WriteMessage(TextMessage, []byte("hello"))
+
+	err = conn.AsyncWait()
+	if err != nil {
+		//panic(err)
+	}
+
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			fmt.Println("error:", err)
+			return
+		}
+		fmt.Println(string(msg))
 	}
 }

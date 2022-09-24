@@ -6,7 +6,7 @@ package websocket
 
 import (
 	"bufio"
-	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -181,10 +181,22 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	if err != nil {
 		return u.returnError(w, r, http.StatusInternalServerError, err.Error())
 	}
-
-	if brw.Reader.Buffered() > 0 {
-		netConn.Close()
-		return nil, errors.New("websocket: client sent data before handshake is complete")
+	unreadLength := brw.Reader.Buffered()
+	if unreadLength > 0 {
+		//netConn.Close()
+		//return nil, errors.New("websocket: client sent data before handshake is complete")
+		unread := make([]byte, unreadLength)
+		n, err := brw.Reader.Read(unread)
+		if err != nil {
+			netConn.Close()
+			return nil, err
+		}
+		if n != unreadLength {
+			netConn.Close()
+			return nil, fmt.Errorf("websocket: read client presend bytes error: length not enough: %d vs %d ", n, brw.Reader.Buffered())
+		}
+		// makesure pre send bytes can be handled
+		netConn = newMergedNetConnReader(netConn, unread)
 	}
 
 	var br *bufio.Reader
