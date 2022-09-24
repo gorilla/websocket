@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
-	"time"
 )
 
 var hostPortNoPortTests = []struct {
@@ -44,13 +43,13 @@ func TestWsServer(t *testing.T) {
 			fmt.Println("err upgrade", err)
 			return
 		}
+		defer conn.Close()
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			fmt.Println("err read message", err)
 			return
 		}
 		conn.WriteMessage(TextMessage, []byte("hello world response："+string(msg)))
-		time.Sleep(1 * time.Second)
 	})
 	http.ListenAndServe(":8888", nil)
 }
@@ -64,7 +63,7 @@ func TestAsyncDial(t *testing.T) {
 
 	err = conn.AsyncWait()
 	if err != nil {
-		//panic(err)
+		panic(err)
 	}
 
 	for {
