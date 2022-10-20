@@ -101,8 +101,8 @@ func checkSameOrigin(r *http.Request) bool {
 func (u *Upgrader) selectSubprotocol(r *http.Request, responseHeader http.Header) string {
 	if u.Subprotocols != nil {
 		clientProtocols := Subprotocols(r)
-		for _, serverProtocol := range u.Subprotocols {
-			for _, clientProtocol := range clientProtocols {
+		for _, clientProtocol := range clientProtocols {
+			for _, serverProtocol := range u.Subprotocols {
 				if clientProtocol == serverProtocol {
 					return clientProtocol
 				}
