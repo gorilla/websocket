@@ -69,7 +69,7 @@ type Dialer struct {
 	// ProxyTLSConnection is nil, NetDialTLSContext is used.
 	// If ProxyTLSConnection is set, Dial assumes the TLS handshake is done there and
 	// TLSClientConfig is ignored.
-	ProxyTLSConnection func(ctx context.Context, proxyConn net.Conn) (net.Conn, error)
+	ProxyTLSConnection func(ctx context.Context, hostPort string, proxyConn net.Conn) (net.Conn, error)
 
 	// Proxy specifies a function to return a proxy for a given
 	// Request. If the function returns a non-nil error, the
@@ -342,7 +342,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 	if u.Scheme == "https" {
 		if d.ProxyTLSConnection != nil && d.Proxy != nil {
 			// If we are connected to a proxy, perform the TLS handshake through the existing tunnel
-			netConn, err = d.ProxyTLSConnection(ctx, netConn)
+			netConn, err = d.ProxyTLSConnection(ctx, hostPort, netConn)
 			if err != nil {
 				return nil, nil, err
 			}
