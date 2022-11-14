@@ -6,7 +6,6 @@ package websocket
 
 import (
 	"io"
-	"io/ioutil"
 	"sync/atomic"
 	"testing"
 )
@@ -45,7 +44,7 @@ func newBroadcastConn(c *Conn) *broadcastConn {
 
 func newBroadcastBench(usePrepared, compression bool) *broadcastBench {
 	bench := &broadcastBench{
-		w:           ioutil.Discard,
+		w:           io.Discard,
 		doneCh:      make(chan struct{}),
 		closeCh:     make(chan struct{}),
 		usePrepared: usePrepared,
