@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"reflect"
 	"sync"
@@ -712,4 +713,38 @@ func TestFailedConnectionReadPanic(t *testing.T) {
 		c.ReadMessage()
 	}
 	t.Fatal("should not get here")
+}
+
+func BenchmarkReadMessageReadAll(b *testing.B) {
+	benchmarkReadMessageReadAll(b, false)
+}
+
+func BenchmarkReadMessageMutable(b *testing.B) {
+	benchmarkReadMessageReadAll(b, true)
+}
+
+func benchmarkReadMessageReadAll(b *testing.B, mutable bool) {
+	var buf bytes.Buffer
+	var pool simpleBufferPool
+	var message = make([]byte, 1024)
+	rand.Read(message)
+	rc := newConn(fakeNetConn{Reader: &buf}, true, mutable, 1024, 1024, &pool, nil, nil)
+	wc := newConn(fakeNetConn{Writer: &buf}, false, mutable, 1024, 1024, &pool, nil, nil)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := wc.WriteMessage(BinaryMessage, message); err != nil {
+			b.Fatalf("wc.WriteMessage() returned %v", err)
+		}
+
+		opCode, p, err := rc.ReadMessage()
+		if opCode != BinaryMessage || err != nil {
+			b.Fatalf("rc.ReadMessage() returned %d, p, %v", opCode, err)
+		}
+
+		if !bytes.Equal(p, message) {
+			b.Fatal("payload different with origin")
+		}
+	}
 }
