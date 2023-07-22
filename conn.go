@@ -280,9 +280,12 @@ type Conn struct {
 
 	readDecompress         bool // whether last read frame had RSV1 set
 	newDecompressionReader func(io.Reader) io.ReadCloser
+
+	mutable    bool
+	mutableBuf []byte
 }
 
-func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, writeBufferPool BufferPool, br *bufio.Reader, writeBuf []byte) *Conn {
+func newConn(conn net.Conn, isServer, mutable bool, readBufferSize, writeBufferSize int, writeBufferPool BufferPool, br *bufio.Reader, writeBuf []byte) *Conn {
 
 	if br == nil {
 		if readBufferSize == 0 {
@@ -316,6 +319,7 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, 
 		writeBufSize:           writeBufferSize,
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
+		mutable:                mutable,
 	}
 	c.SetCloseHandler(nil)
 	c.SetPingHandler(nil)
@@ -1094,7 +1098,29 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 	if err != nil {
 		return messageType, nil, err
 	}
-	p, err = ioutil.ReadAll(r)
+	if !c.mutable {
+		p, err = ioutil.ReadAll(r)
+	} else {
+		if c.mutableBuf == nil {
+			c.mutableBuf = make([]byte, 0, 512)
+		}
+		p = c.mutableBuf
+		for {
+			if len(p) == cap(p) {
+				// Add more capacity (let append pick how much).
+				p = append(p, 0)[:len(p)]
+			}
+			n, err := r.Read(p[len(p):cap(p)])
+			p = p[:len(p)+n]
+			if err != nil {
+				if err == io.EOF {
+					err = nil
+				}
+				c.mutableBuf = p[:0]
+				return messageType, p, err
+			}
+		}
+	}
 	return messageType, p, err
 }
 
@@ -1220,6 +1246,29 @@ func (c *Conn) SetCompressionLevel(level int) error {
 	}
 	c.compressionLevel = level
 	return nil
+}
+
+// Mutable returns the current mutable field.
+func (c *Conn) Mutable() bool {
+	return c.mutable
+}
+
+// SetMutable sets the mutable field.
+func (c *Conn) SetMutable(mutable bool) {
+	c.mutable = mutable
+}
+
+// MutableBuffer returns the current mutable buffer.
+func (c *Conn) MutableBuffer() []byte {
+	return c.mutableBuf
+}
+
+// SetMutableBuffer sets the current mutable buffer.
+// Users can customize the initial read buffer to optimize reading performance.
+// For example, after ws connected and before the first calling of ReadMessage,
+// users SetMutableBuffer to a suitable size according to their message size.
+func (c *Conn) SetMutableBuffer(b []byte) {
+	c.mutableBuf = b
 }
 
 // FormatCloseMessage formats closeCode and text as a WebSocket close message.

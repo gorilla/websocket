@@ -14,6 +14,7 @@ import (
 	"net"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/iotest"
 	"time"
@@ -40,6 +41,10 @@ var (
 	remoteAddr = fakeAddr(2)
 )
 
+var (
+	mutableCnt uint32
+)
+
 func (a fakeAddr) Network() string {
 	return "net"
 }
@@ -48,10 +53,14 @@ func (a fakeAddr) String() string {
 	return "str"
 }
 
+func nextConnMutable() bool {
+	return atomic.AddUint32(&mutableCnt, 1)%2 == 0
+}
+
 // newTestConn creates a connnection backed by a fake network connection using
 // default values for buffering.
 func newTestConn(r io.Reader, w io.Writer, isServer bool) *Conn {
-	return newConn(fakeNetConn{Reader: r, Writer: w}, isServer, 1024, 1024, nil, nil, nil)
+	return newConn(fakeNetConn{Reader: r, Writer: w}, isServer, nextConnMutable(), 1024, 1024, nil, nil, nil)
 }
 
 func TestFraming(t *testing.T) {
@@ -209,7 +218,7 @@ func TestWriteBufferPool(t *testing.T) {
 
 	// Specify writeBufferSize smaller than message size to ensure that pooling
 	// works with fragmented messages.
-	wc := newConn(fakeNetConn{Writer: &buf}, true, 1024, len(message)-1, &pool, nil, nil)
+	wc := newConn(fakeNetConn{Writer: &buf}, true, nextConnMutable(), 1024, len(message)-1, &pool, nil, nil)
 
 	if wc.writeBuf != nil {
 		t.Fatal("writeBuf not nil after create")
@@ -281,7 +290,7 @@ func TestWriteBufferPool(t *testing.T) {
 func TestWriteBufferPoolSync(t *testing.T) {
 	var buf bytes.Buffer
 	var pool sync.Pool
-	wc := newConn(fakeNetConn{Writer: &buf}, true, 1024, 1024, &pool, nil, nil)
+	wc := newConn(fakeNetConn{Writer: &buf}, true, nextConnMutable(), 1024, 1024, &pool, nil, nil)
 	rc := newTestConn(&buf, nil, false)
 
 	const message = "Hello World!"
@@ -311,7 +320,7 @@ func TestWriteBufferPoolError(t *testing.T) {
 	// Part 1: Test NextWriter/Write/Close
 
 	var pool simpleBufferPool
-	wc := newConn(fakeNetConn{Writer: errorWriter{}}, true, 1024, 1024, &pool, nil, nil)
+	wc := newConn(fakeNetConn{Writer: errorWriter{}}, true, nextConnMutable(), 1024, 1024, &pool, nil, nil)
 
 	w, err := wc.NextWriter(TextMessage)
 	if err != nil {
@@ -338,7 +347,7 @@ func TestWriteBufferPoolError(t *testing.T) {
 
 	// Part 2: Test WriteMessage
 
-	wc = newConn(fakeNetConn{Writer: errorWriter{}}, true, 1024, 1024, &pool, nil, nil)
+	wc = newConn(fakeNetConn{Writer: errorWriter{}}, true, nextConnMutable(), 1024, 1024, &pool, nil, nil)
 
 	if err := wc.WriteMessage(TextMessage, []byte("Hello")); err == nil {
 		t.Fatalf("wc.WriteMessage did not return error")
@@ -355,7 +364,7 @@ func TestCloseFrameBeforeFinalMessageFrame(t *testing.T) {
 	expectedErr := &CloseError{Code: CloseNormalClosure, Text: "hello"}
 
 	var b1, b2 bytes.Buffer
-	wc := newConn(&fakeNetConn{Reader: nil, Writer: &b1}, false, 1024, bufSize, nil, nil, nil)
+	wc := newConn(&fakeNetConn{Reader: nil, Writer: &b1}, false, nextConnMutable(), 1024, bufSize, nil, nil, nil)
 	rc := newTestConn(&b1, &b2, true)
 
 	w, _ := wc.NextWriter(BinaryMessage)
@@ -416,7 +425,7 @@ func TestEOFBeforeFinalFrame(t *testing.T) {
 	const bufSize = 512
 
 	var b1, b2 bytes.Buffer
-	wc := newConn(&fakeNetConn{Writer: &b1}, false, 1024, bufSize, nil, nil, nil)
+	wc := newConn(&fakeNetConn{Writer: &b1}, false, nextConnMutable(), 1024, bufSize, nil, nil, nil)
 	rc := newTestConn(&b1, &b2, true)
 
 	w, _ := wc.NextWriter(BinaryMessage)
@@ -468,7 +477,7 @@ func TestReadLimit(t *testing.T) {
 		message := make([]byte, readLimit+1)
 
 		var b1, b2 bytes.Buffer
-		wc := newConn(&fakeNetConn{Writer: &b1}, false, 1024, readLimit-2, nil, nil, nil)
+		wc := newConn(&fakeNetConn{Writer: &b1}, false, nextConnMutable(), 1024, readLimit-2, nil, nil, nil)
 		rc := newTestConn(&b1, &b2, true)
 		rc.SetReadLimit(readLimit)
 
@@ -565,7 +574,7 @@ func TestAddrs(t *testing.T) {
 func TestDeprecatedUnderlyingConn(t *testing.T) {
 	var b1, b2 bytes.Buffer
 	fc := fakeNetConn{Reader: &b1, Writer: &b2}
-	c := newConn(fc, true, 1024, 1024, nil, nil, nil)
+	c := newConn(fc, true, nextConnMutable(), 1024, 1024, nil, nil, nil)
 	ul := c.UnderlyingConn()
 	if ul != fc {
 		t.Fatalf("Underlying conn is not what it should be.")
@@ -575,7 +584,7 @@ func TestDeprecatedUnderlyingConn(t *testing.T) {
 func TestNetConn(t *testing.T) {
 	var b1, b2 bytes.Buffer
 	fc := fakeNetConn{Reader: &b1, Writer: &b2}
-	c := newConn(fc, true, 1024, 1024, nil, nil, nil)
+	c := newConn(fc, true, nextConnMutable(), 1024, 1024, nil, nil, nil)
 	ul := c.NetConn()
 	if ul != fc {
 		t.Fatalf("Underlying conn is not what it should be.")
@@ -589,8 +598,8 @@ func TestBufioReadBytes(t *testing.T) {
 	m[len(m)-1] = '\n'
 
 	var b1, b2 bytes.Buffer
-	wc := newConn(fakeNetConn{Writer: &b1}, false, len(m)+64, len(m)+64, nil, nil, nil)
-	rc := newConn(fakeNetConn{Reader: &b1, Writer: &b2}, true, len(m)-64, len(m)-64, nil, nil, nil)
+	wc := newConn(fakeNetConn{Writer: &b1}, false, nextConnMutable(), len(m)+64, len(m)+64, nil, nil, nil)
+	rc := newConn(fakeNetConn{Reader: &b1, Writer: &b2}, true, nextConnMutable(), len(m)-64, len(m)-64, nil, nil, nil)
 
 	w, _ := wc.NextWriter(BinaryMessage)
 	w.Write(m)

@@ -67,11 +67,25 @@ type Upgrader struct {
 	// prevent cross-site request forgery.
 	CheckOrigin func(r *http.Request) bool
 
-	// EnableCompression specify if the server should attempt to negotiate per
+	// EnableCompression specifies if the server should attempt to negotiate per
 	// message compression (RFC 7692). Setting this value to true does not
 	// guarantee that compression will be supported. Currently only "no context
 	// takeover" modes are supported.
 	EnableCompression bool
+
+	// Mutable specify if the bytes returned by ReadMessage will be overwritten in
+	// next ReadMessage.
+	//
+	// If Mutable is set to false, ReadMessage calls ioutil.ReadAll to read and
+	// return a message, and the message would be safe to be passed to other goroutines
+	// by users.
+	// Mutable is false by default to compatible with old versions.
+	//
+	// If Mutable is set to true, ReadMessage reuses a buffer to read and
+	// return the buffer to users, and the buffer will be overwritten in next ReadMessage.
+	// This is used to optimize performance.
+	// Should be aware that it's not safe to pass the mutable buffer to other goroutines.
+	Mutable bool
 }
 
 func (u *Upgrader) returnError(w http.ResponseWriter, r *http.Request, status int, reason string) (*Conn, error) {
@@ -201,7 +215,8 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		writeBuf = buf
 	}
 
-	c := newConn(netConn, true, u.ReadBufferSize, u.WriteBufferSize, u.WriteBufferPool, br, writeBuf)
+	c := newConn(netConn, true, u.Mutable, u.ReadBufferSize, u.WriteBufferSize, u.WriteBufferPool, br, writeBuf)
+	c.mutable = u.Mutable
 	c.subprotocol = subprotocol
 
 	if compress {
