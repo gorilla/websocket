@@ -1104,7 +1104,7 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 		if c.mutableBuf == nil {
 			c.mutableBuf = make([]byte, 0, 512)
 		}
-		p = c.mutableBuf
+		p = c.mutableBuf[0:0]
 		for {
 			if len(p) == cap(p) {
 				// Add more capacity (let append pick how much).
