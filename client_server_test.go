@@ -14,7 +14,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -50,7 +49,6 @@ type cstHandler struct{ *testing.T }
 type cstServer struct {
 	*httptest.Server
 	URL string
-	t   *testing.T
 }
 
 const (
@@ -94,7 +92,6 @@ func (t cstHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ws, err := cstUpgrader.Upgrade(w, r, http.Header{"Set-Cookie": {"sessionID=1234"}})
 	if err != nil {
-		t.Logf("Upgrade: %v", err)
 		return
 	}
 	defer ws.Close()
@@ -106,20 +103,16 @@ func (t cstHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	op, rd, err := ws.NextReader()
 	if err != nil {
-		t.Logf("NextReader: %v", err)
 		return
 	}
 	wr, err := ws.NextWriter(op)
 	if err != nil {
-		t.Logf("NextWriter: %v", err)
 		return
 	}
 	if _, err = io.Copy(wr, rd); err != nil {
-		t.Logf("NextWriter: %v", err)
 		return
 	}
 	if err := wr.Close(); err != nil {
-		t.Logf("Close: %v", err)
 		return
 	}
 }
@@ -531,7 +524,9 @@ func TestRespOnBadHandshake(t *testing.T) {
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(expectedStatus)
-		io.WriteString(w, expectedBody)
+		if _, err := io.WriteString(w, expectedBody); err != nil {
+			t.Fatalf("WriteString: %v", err)
+		}
 	}))
 	defer s.Close()
 
@@ -549,7 +544,7 @@ func TestRespOnBadHandshake(t *testing.T) {
 		t.Errorf("resp.StatusCode=%d, want %d", resp.StatusCode, expectedStatus)
 	}
 
-	p, err := ioutil.ReadAll(resp.Body)
+	p, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("ReadFull(resp.Body) returned error %v", err)
 	}
@@ -564,7 +559,6 @@ type testLogWriter struct {
 }
 
 func (w testLogWriter) Write(p []byte) (int, error) {
-	w.t.Logf("%s", p)
 	return len(p), nil
 }
 
@@ -781,7 +775,10 @@ func TestSocksProxyDial(t *testing.T) {
 		}
 		defer c1.Close()
 
-		c1.SetDeadline(time.Now().Add(30 * time.Second))
+		if err := c1.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
+			t.Errorf("set deadline failed: %v", err)
+			return
+		}
 
 		buf := make([]byte, 32)
 		if _, err := io.ReadFull(c1, buf[:3]); err != nil {
@@ -820,10 +817,15 @@ func TestSocksProxyDial(t *testing.T) {
 		defer c2.Close()
 		done := make(chan struct{})
 		go func() {
-			io.Copy(c1, c2)
+			if _, err := io.Copy(c1, c2); err != nil {
+				t.Errorf("copy failed: %v", err)
+			}
 			close(done)
 		}()
-		io.Copy(c2, c1)
+		if _, err := io.Copy(c2, c1); err != nil {
+			t.Errorf("copy failed: %v", err)
+			return
+		}
 		<-done
 	}()
 

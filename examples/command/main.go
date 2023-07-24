@@ -189,5 +189,9 @@ func main() {
 	}
 	http.HandleFunc("/", serveHome)
 	http.HandleFunc("/ws", serveWs)
-	log.Fatal(http.ListenAndServe(*addr, nil))
+	server := &http.Server{
+		Addr:              *addr,
+		ReadHeaderTimeout: 3 * time.Second,
+	}
+	log.Fatal(server.ListenAndServe())
 }
