@@ -98,7 +98,7 @@ func TestBufioReuse(t *testing.T) {
 		}
 		upgrader := Upgrader{}
 		c, err := upgrader.Upgrade(resp, &http.Request{
-			Method: "GET",
+			Method: http.MethodGet,
 			Header: http.Header{
 				"Upgrade":               []string{"websocket"},
 				"Connection":            []string{"upgrade"},
@@ -111,7 +111,7 @@ func TestBufioReuse(t *testing.T) {
 		if reuse := c.br == br; reuse != tt.reuse {
 			t.Errorf("%d: buffered reader reuse=%v, want %v", i, reuse, tt.reuse)
 		}
-		writeBuf := bufioWriterBuffer(c.UnderlyingConn(), bw)
+		writeBuf := bufioWriterBuffer(c.NetConn(), bw)
 		if reuse := &c.writeBuf[0] == &writeBuf[0]; reuse != tt.reuse {
 			t.Errorf("%d: write buffer reuse=%v, want %v", i, reuse, tt.reuse)
 		}
