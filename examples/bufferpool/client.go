@@ -1,7 +1,3 @@
-// Copyright 2015 The Gorilla WebSocket Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 //go:build ignore
 // +build ignore
 
@@ -13,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -20,16 +17,14 @@ import (
 
 var addr = flag.String("addr", "localhost:8080", "http service address")
 
-func main() {
-	flag.Parse()
-	log.SetFlags(0)
+func runNewConn(wg *sync.WaitGroup) {
+	defer wg.Done()
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	u := url.URL{Scheme: "ws", Host: *addr, Path: "/echo"}
+	u := url.URL{Scheme: "ws", Host: *addr, Path: "/ws"}
 	log.Printf("connecting to %s", u.String())
-
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
 		log.Fatal("dial:", err)
@@ -50,7 +45,7 @@ func main() {
 		}
 	}()
 
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(time.Minute * 5)
 	defer ticker.Stop()
 
 	for {
@@ -80,4 +75,15 @@ func main() {
 			return
 		}
 	}
+}
+
+func main() {
+	flag.Parse()
+	log.SetFlags(0)
+	wg := &sync.WaitGroup{}
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go runNewConn(wg)
+	}
+	wg.Wait()
 }
