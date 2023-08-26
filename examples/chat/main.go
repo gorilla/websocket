@@ -8,6 +8,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"time"
 )
 
 var addr = flag.String("addr", ":8080", "http service address")
@@ -33,7 +34,11 @@ func main() {
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		serveWs(hub, w, r)
 	})
-	err := http.ListenAndServe(*addr, nil)
+	server := &http.Server{
+		Addr:              *addr,
+		ReadHeaderTimeout: 3 * time.Second,
+	}
+	err := server.ListenAndServe()
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}

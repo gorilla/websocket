@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -183,7 +184,9 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	}
 
 	if brw.Reader.Buffered() > 0 {
-		netConn.Close()
+		if err := netConn.Close(); err != nil {
+			log.Printf("websocket: failed to close network connection: %v", err)
+		}
 		return nil, errors.New("websocket: client sent data before handshake is complete")
 	}
 
@@ -248,17 +251,34 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	p = append(p, "\r\n"...)
 
 	// Clear deadlines set by HTTP server.
-	netConn.SetDeadline(time.Time{})
+	if err := netConn.SetDeadline(time.Time{}); err != nil {
+		if err := netConn.Close(); err != nil {
+			log.Printf("websocket: failed to close network connection: %v", err)
+		}
+		return nil, err
+	}
 
 	if u.HandshakeTimeout > 0 {
-		netConn.SetWriteDeadline(time.Now().Add(u.HandshakeTimeout))
+		if err := netConn.SetWriteDeadline(time.Now().Add(u.HandshakeTimeout)); err != nil {
+			if err := netConn.Close(); err != nil {
+				log.Printf("websocket: failed to close network connection: %v", err)
+			}
+			return nil, err
+		}
 	}
 	if _, err = netConn.Write(p); err != nil {
-		netConn.Close()
+		if err := netConn.Close(); err != nil {
+			log.Printf("websocket: failed to close network connection: %v", err)
+		}
 		return nil, err
 	}
 	if u.HandshakeTimeout > 0 {
-		netConn.SetWriteDeadline(time.Time{})
+		if err := netConn.SetWriteDeadline(time.Time{}); err != nil {
+			if err := netConn.Close(); err != nil {
+				log.Printf("websocket: failed to close network connection: %v", err)
+			}
+			return nil, err
+		}
 	}
 
 	return c, nil
@@ -356,8 +376,12 @@ func bufioWriterBuffer(originalWriter io.Writer, bw *bufio.Writer) []byte {
 	// bufio.Writer's underlying writer.
 	var wh writeHook
 	bw.Reset(&wh)
-	bw.WriteByte(0)
-	bw.Flush()
+	if err := bw.WriteByte(0); err != nil {
+		panic(err)
+	}
+	if err := bw.Flush(); err != nil {
+		log.Printf("websocket: bufioWriterBuffer: Flush: %v", err)
+	}
 
 	bw.Reset(originalWriter)
 
