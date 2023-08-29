@@ -6,6 +6,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 )
 
@@ -52,7 +53,7 @@ func (c *Conn) ReadJSON(v interface{}) error {
 		return err
 	}
 	err = json.NewDecoder(r).Decode(v)
-	if err == io.EOF {
+	if errors.Is(err, io.EOF) {
 		// One value is expected in the message.
 		err = io.ErrUnexpectedEOF
 	}

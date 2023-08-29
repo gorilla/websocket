@@ -404,18 +404,18 @@ func TestEOFWithinFrame(t *testing.T) {
 		b.Truncate(n)
 
 		op, r, err := rc.NextReader()
-		if err == errUnexpectedEOF {
+		if errors.Is(err, errUnexpectedEOF) {
 			continue
 		}
 		if op != BinaryMessage || err != nil {
 			t.Fatalf("%d: NextReader() returned %d, %v", n, op, err)
 		}
 		_, err = io.Copy(io.Discard, r)
-		if err != errUnexpectedEOF {
+		if !errors.Is(err, errUnexpectedEOF) {
 			t.Fatalf("%d: io.Copy() returned %v, want %v", n, err, errUnexpectedEOF)
 		}
 		_, _, err = rc.NextReader()
-		if err != errUnexpectedEOF {
+		if !errors.Is(err, errUnexpectedEOF) {
 			t.Fatalf("%d: NextReader() returned %v, want %v", n, err, errUnexpectedEOF)
 		}
 	}
@@ -438,11 +438,11 @@ func TestEOFBeforeFinalFrame(t *testing.T) {
 		t.Fatalf("NextReader() returned %d, %v", op, err)
 	}
 	_, err = io.Copy(io.Discard, r)
-	if err != errUnexpectedEOF {
+	if !errors.Is(err, errUnexpectedEOF) {
 		t.Fatalf("io.Copy() returned %v, want %v", err, errUnexpectedEOF)
 	}
 	_, _, err = rc.NextReader()
-	if err != errUnexpectedEOF {
+	if !errors.Is(err, errUnexpectedEOF) {
 		t.Fatalf("NextReader() returned %v, want %v", err, errUnexpectedEOF)
 	}
 }
@@ -514,7 +514,7 @@ func TestReadLimit(t *testing.T) {
 			t.Fatalf("2: NextReader() returned %d, %v", op, err)
 		}
 		_, err = io.Copy(io.Discard, r)
-		if err != ErrReadLimit {
+		if !errors.Is(err, ErrReadLimit) {
 			t.Fatalf("io.Copy() returned %v", err)
 		}
 	})
@@ -558,13 +558,13 @@ func TestReadLimit(t *testing.T) {
 		var buf [10]byte
 		var read int
 		n, err := r.Read(buf[:])
-		if err != nil && err != ErrReadLimit {
+		if err != nil && !errors.Is(err, ErrReadLimit) {
 			t.Fatalf("unexpected error testing read limit: %v", err)
 		}
 		read += n
 
 		n, err = r.Read(buf[:])
-		if err != nil && err != ErrReadLimit {
+		if err != nil && !errors.Is(err, ErrReadLimit) {
 			t.Fatalf("unexpected error testing read limit: %v", err)
 		}
 		read += n
