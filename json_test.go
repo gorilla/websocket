@@ -7,6 +7,7 @@ package websocket
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"reflect"
 	"testing"
@@ -79,13 +80,14 @@ func TestPartialJSONRead(t *testing.T) {
 
 	for i := 0; i < messageCount; i++ {
 		err := rc.ReadJSON(&v)
-		if err != io.ErrUnexpectedEOF {
+		if !errors.Is(err, io.ErrUnexpectedEOF) {
 			t.Error("read", i, err)
 		}
 	}
 
 	err = rc.ReadJSON(&v)
-	if _, ok := err.(*CloseError); !ok {
+	var ce *CloseError
+	if !errors.As(err, &ce) {
 		t.Error("final", err)
 	}
 }

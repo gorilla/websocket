@@ -149,7 +149,8 @@ func (e *CloseError) Error() string {
 // IsCloseError returns boolean indicating whether the error is a *CloseError
 // with one of the specified codes.
 func IsCloseError(err error, codes ...int) bool {
-	if e, ok := err.(*CloseError); ok {
+	var e *CloseError
+	if errors.As(err, &e) {
 		for _, code := range codes {
 			if e.Code == code {
 				return true
@@ -162,7 +163,8 @@ func IsCloseError(err error, codes ...int) bool {
 // IsUnexpectedCloseError returns boolean indicating whether the error is a
 // *CloseError with a code not in the list of expected codes.
 func IsUnexpectedCloseError(err error, expectedCodes ...int) bool {
-	if e, ok := err.(*CloseError); ok {
+	var e *CloseError
+	if errors.As(err, &e) {
 		for _, code := range expectedCodes {
 			if e.Code == code {
 				return false
@@ -376,7 +378,7 @@ func (c *Conn) writeFatal(err error) error {
 
 func (c *Conn) read(n int) ([]byte, error) {
 	p, err := c.br.Peek(n)
-	if err == io.EOF {
+	if errors.Is(err, io.EOF) {
 		err = errUnexpectedEOF
 	}
 	if _, err := c.br.Discard(len(p)); err != nil {
@@ -730,7 +732,7 @@ func (w *messageWriter) ReadFrom(r io.Reader) (nn int64, err error) {
 		w.pos += n
 		nn += int64(n)
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				err = nil
 			}
 			break
@@ -1082,7 +1084,7 @@ func (r *messageReader) Read(b []byte) (int, error) {
 			if err := c.setReadRemaining(rem); err != nil {
 				return 0, err
 			}
-			if c.readRemaining > 0 && c.readErr == io.EOF {
+			if c.readRemaining > 0 && errors.Is(c.readErr, io.EOF) {
 				c.readErr = errUnexpectedEOF
 			}
 			return n, c.readErr
@@ -1103,7 +1105,7 @@ func (r *messageReader) Read(b []byte) (int, error) {
 	}
 
 	err := c.readErr
-	if err == io.EOF && c.messageReader == r {
+	if errors.Is(err, io.EOF) && c.messageReader == r {
 		err = errUnexpectedEOF
 	}
 	return 0, err

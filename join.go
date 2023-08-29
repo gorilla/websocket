@@ -5,6 +5,7 @@
 package websocket
 
 import (
+	"errors"
 	"io"
 	"strings"
 )
@@ -34,7 +35,7 @@ func (r *joinReader) Read(p []byte) (int, error) {
 		}
 	}
 	n, err := r.r.Read(p)
-	if err == io.EOF {
+	if errors.Is(err, io.EOF) {
 		err = nil
 		r.r = nil
 	}
