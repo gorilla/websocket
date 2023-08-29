@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -90,17 +91,6 @@ var ErrCloseSent = errors.New("websocket: close sent")
 // read limit set for the connection.
 var ErrReadLimit = errors.New("websocket: read limit exceeded")
 
-// netError satisfies the net Error interface.
-type netError struct {
-	msg       string
-	temporary bool
-	timeout   bool
-}
-
-func (e *netError) Error() string   { return e.msg }
-func (e *netError) Temporary() bool { return e.temporary }
-func (e *netError) Timeout() bool   { return e.timeout }
-
 // CloseError represents a close message.
 type CloseError struct {
 	// Code is defined in RFC 6455, section 11.7.
@@ -174,7 +164,6 @@ func IsUnexpectedCloseError(err error, expectedCodes ...int) bool {
 }
 
 var (
-	errWriteTimeout        = &netError{msg: "websocket: write timeout", timeout: true, temporary: true}
 	errUnexpectedEOF       = &CloseError{Code: CloseAbnormalClosure, Text: io.ErrUnexpectedEOF.Error()}
 	errBadWriteOpCode      = errors.New("websocket: bad write message type")
 	errWriteClosed         = errors.New("websocket: write closed")
@@ -191,13 +180,6 @@ func newMaskKey() [4]byte {
 	var k [4]byte
 	_, _ = io.ReadFull(maskRand, k[:])
 	return k
-}
-
-func hideTempErr(err error) error {
-	if e, ok := err.(net.Error); ok {
-		err = &netError{msg: e.Error(), timeout: e.Timeout()}
-	}
-	return err
 }
 
 func isControl(frameType int) bool {
@@ -365,7 +347,6 @@ func (c *Conn) RemoteAddr() net.Addr {
 // Write methods
 
 func (c *Conn) writeFatal(err error) error {
-	err = hideTempErr(err)
 	c.writeErrMu.Lock()
 	if c.writeErr == nil {
 		c.writeErr = err
@@ -451,7 +432,7 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 	if !deadline.IsZero() {
 		d = time.Until(deadline)
 		if d < 0 {
-			return errWriteTimeout
+			return os.ErrDeadlineExceeded
 		}
 	}
 
@@ -460,7 +441,7 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 	case <-c.mu:
 		timer.Stop()
 	case <-timer.C:
-		return errWriteTimeout
+		return os.ErrDeadlineExceeded
 	}
 	defer func() { c.mu <- struct{}{} }()
 
@@ -1019,11 +1000,17 @@ func (c *Conn) handleProtocolError(message string) error {
 // permanent. Once this method returns a non-nil error, all subsequent calls to
 // this method return the same error.
 func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
-	// Close previous reader, only relevant for decompression.
 	if c.reader != nil {
-		if err := c.reader.Close(); err != nil {
-			log.Printf("websocket: discarding reader close error: %v", err)
-		}
+		// In old versions of Go, the compress/flate reader Close method
+		// released resources used by the reader. In recent versions of Go, the
+		// Close method is a noop that returns the last Read error.
+        //
+		// We retain the call to Close because it's unclear from the
+		// documentation whether the call is required or not.
+		//
+		// We ignore the error returned from Close because that error was
+		// handled elsewhere.
+		_ = c.reader.Close()
 		c.reader = nil
 	}
 
@@ -1033,7 +1020,7 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 	for c.readErr == nil {
 		frameType, err := c.advanceFrame()
 		if err != nil {
-			c.readErr = hideTempErr(err)
+			c.readErr = err
 			break
 		}
 
@@ -1073,7 +1060,7 @@ func (r *messageReader) Read(b []byte) (int, error) {
 				b = b[:c.readRemaining]
 			}
 			n, err := c.br.Read(b)
-			c.readErr = hideTempErr(err)
+			c.readErr = err
 			if c.isServer {
 				c.readMaskPos = maskBytes(c.readMaskKey, c.readMaskPos, b[:n])
 			}
@@ -1096,7 +1083,7 @@ func (r *messageReader) Read(b []byte) (int, error) {
 		frameType, err := c.advanceFrame()
 		switch {
 		case err != nil:
-			c.readErr = hideTempErr(err)
+			c.readErr = err
 		case frameType == TextMessage || frameType == BinaryMessage:
 			c.readErr = errors.New("websocket: internal error, unexpected text or binary in Reader")
 		}
@@ -1164,6 +1151,11 @@ func (c *Conn) SetCloseHandler(h func(code int, text string) error) {
 		h = func(code int, text string) error {
 			message := FormatCloseMessage(code, "")
 			if err := c.WriteControl(CloseMessage, message, time.Now().Add(writeWait)); err != nil {
+				if errors.Is(err, ErrCloseSent) || errors.Is(err, os.ErrDeadlineExceeded) {
+					// Ignore error caused by close arriving after the application
+					// sent a close message. Ignore deadline errors.
+					return nil
+				}
 				return err
 			}
 			return nil
@@ -1188,9 +1180,9 @@ func (c *Conn) SetPingHandler(h func(appData string) error) {
 	if h == nil {
 		h = func(message string) error {
 			err := c.WriteControl(PongMessage, []byte(message), time.Now().Add(writeWait))
-			if err == ErrCloseSent {
-				return nil
-			} else if _, ok := err.(net.Error); ok {
+			if errors.Is(err, ErrCloseSent) || errors.Is(err, os.ErrDeadlineExceeded) {
+				// Ignore error caused by ping arriving after the application
+				// sent a close message. Ignore deadline errors.
 				return nil
 			}
 			return err

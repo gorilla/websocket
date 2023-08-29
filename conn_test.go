@@ -18,8 +18,6 @@ import (
 	"time"
 )
 
-var _ net.Error = errWriteTimeout
-
 type fakeNetConn struct {
 	io.Reader
 	io.Writer
