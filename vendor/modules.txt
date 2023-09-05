@@ -1,0 +1,4 @@
+# golang.org/x/net v0.14.0
+## explicit; go 1.17
+golang.org/x/net/internal/socks
+golang.org/x/net/proxy
