@@ -113,3 +113,12 @@ func TestParseExtensions(t *testing.T) {
 		}
 	}
 }
+
+func TestComputeAcceptKey(t *testing.T) {
+	// Challenge and accept keys are from section 1.3 of the RFC.
+	got := computeAcceptKey("dGhlIHNhbXBsZSBub25jZQ==")
+	want := "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
+	if got != want {
+		t.Errorf("got %s, want %s", got, want)
+	}
+}
