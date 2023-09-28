@@ -266,7 +266,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 			return nil, err
 		}
 	}
-	if _, err = netConn.Write(p); err != nil {
+	if _, err = w.Write(p); err != nil {
 		if err := netConn.Close(); err != nil {
 			log.Printf("websocket: failed to close network connection: %v", err)
 		}
