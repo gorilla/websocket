@@ -189,6 +189,10 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		return nil, nil, errMalformedURL
 	}
 
+	host := requestHeader.Get("Host")
+	if host == "" {
+		host = u.Host
+	}
 	req := &http.Request{
 		Method:     http.MethodGet,
 		URL:        u,
@@ -196,7 +200,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		ProtoMajor: 1,
 		ProtoMinor: 1,
 		Header:     make(http.Header),
-		Host:       u.Host,
+		Host:       host,
 	}
 	req = req.WithContext(ctx)
 
@@ -347,7 +351,11 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 
 		cfg := cloneTLSConfig(d.TLSClientConfig)
 		if cfg.ServerName == "" {
-			cfg.ServerName = hostNoPort
+			if host != "" {
+				cfg.ServerName = host
+			} else {
+				cfg.ServerName = hostNoPort
+			}
 		}
 		tlsConn := tls.Client(netConn, cfg)
 		netConn = tlsConn
