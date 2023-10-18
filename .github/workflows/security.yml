@@ -1,4 +1,4 @@
-name: Test
+name: Security
 on:
   push:
     branches:
@@ -9,13 +9,12 @@ on:
 permissions:
   contents: read
 jobs:
-  unit:
+  scan:
     strategy:
       matrix:
         go: ['1.20','1.21']
-        os: [ubuntu-latest, macos-latest, windows-latest]
       fail-fast: true
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -26,10 +25,13 @@ jobs:
           go-version: ${{ matrix.go }}
           cache: false
 
-      - name: Run Tests
-        run: go test -race -cover -coverprofile=coverage -covermode=atomic -v ./...
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+      - name: Run GoSec
+        uses: securego/gosec@master
         with:
-          files: ./coverage
+          args: -exclude-dir examples ./...
+
+      - name: Run GoVulnCheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: ${{ matrix.go }}
+          go-package: ./...
