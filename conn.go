@@ -1159,8 +1159,12 @@ func (c *Conn) SetCloseHandler(h func(code int, text string) error) {
 		h = func(code int, text string) error {
 			message := FormatCloseMessage(code, "")
 			err := c.WriteControl(CloseMessage, message, time.Now().Add(writeWait))
-			if err != nil && err != ErrCloseSent {
-				return err
+			if err != nil {
+				if _, ok := err.(net.Error); ok {
+					return nil
+				} else if err != ErrCloseSent {
+					return err
+				}
 			}
 			return nil
 		}
