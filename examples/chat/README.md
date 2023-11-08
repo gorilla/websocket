@@ -38,7 +38,7 @@ sends them to the hub.
 ### Hub 
 
 The code for the `Hub` type is in
-[hub.go](https://github.com/gorilla/websocket/blob/master/examples/chat/hub.go). 
+[hub.go](https://github.com/gorilla/websocket/blob/main/examples/chat/hub.go). 
 The application's `main` function starts the hub's `run` method as a goroutine.
 Clients send requests to the hub using the `register`, `unregister` and
 `broadcast` channels.
@@ -57,7 +57,7 @@ unregisters the client and closes the websocket.
 
 ### Client
 
-The code for the `Client` type is in [client.go](https://github.com/gorilla/websocket/blob/master/examples/chat/client.go).
+The code for the `Client` type is in [client.go](https://github.com/gorilla/websocket/blob/main/examples/chat/client.go).
 
 The `serveWs` function is registered by the application's `main` function as
 an HTTP handler. The handler upgrades the HTTP connection to the WebSocket
@@ -85,7 +85,7 @@ network.
 
 ## Frontend
 
-The frontend code is in [home.html](https://github.com/gorilla/websocket/blob/master/examples/chat/home.html).
+The frontend code is in [home.html](https://github.com/gorilla/websocket/blob/main/examples/chat/home.html).
 
 On document load, the script checks for websocket functionality in the browser.
 If websocket functionality is available, then the script opens a connection to
