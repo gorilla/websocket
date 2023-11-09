@@ -477,6 +477,26 @@ func TestWriteAfterMessageWriterClose(t *testing.T) {
 	}
 }
 
+func TestWriteHandlerDoesNotReturnErrCloseSent(t *testing.T) {
+	var b1, b2 bytes.Buffer
+
+	client := newTestConn(&b2, &b1, false)
+	server := newTestConn(&b1, &b2, true)
+
+	msg := FormatCloseMessage(CloseNormalClosure, "")
+	if err := client.WriteMessage(CloseMessage, msg); err != nil {
+		t.Fatalf("unexpected error when writing close message, %v", err)
+	}
+
+	if _, _, err := server.NextReader(); !IsCloseError(err, 1000) {
+		t.Fatalf("server expects a close message, %v returned", err)
+	}
+
+	if _, _, err := client.NextReader(); !IsCloseError(err, 1000) {
+		t.Fatalf("client expects a close message, %v returned", err)
+	}
+}
+
 func TestReadLimit(t *testing.T) {
 	t.Run("Test ReadLimit is enforced", func(t *testing.T) {
 		const readLimit = 512
