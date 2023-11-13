@@ -399,7 +399,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		}
 	}
 
-	if resp.StatusCode != 101 ||
+	if resp.StatusCode != http.StatusSwitchingProtocols ||
 		!tokenListContainsValue(resp.Header, "Upgrade", "websocket") ||
 		!tokenListContainsValue(resp.Header, "Connection", "upgrade") ||
 		resp.Header.Get("Sec-Websocket-Accept") != computeAcceptKey(challengeKey) {
