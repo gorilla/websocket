@@ -1158,7 +1158,10 @@ func (c *Conn) SetCloseHandler(h func(code int, text string) error) {
 	if h == nil {
 		h = func(code int, text string) error {
 			message := FormatCloseMessage(code, "")
-			_ = c.WriteControl(CloseMessage, message, time.Now().Add(writeWait))
+			err := c.WriteControl(CloseMessage, message, time.Now().Add(writeWait))
+			if err != nil {
+				log.Printf("websocket: discarding close handler error: %v", err)
+			}
 			return nil
 		}
 	}
