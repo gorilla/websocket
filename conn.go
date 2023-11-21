@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 )
@@ -258,7 +259,7 @@ type Conn struct {
 	writeBufSize  int
 	writeDeadline time.Time
 	writer        io.WriteCloser // the current writer returned to the application
-	isWriting     bool           // for best-effort concurrent write detection
+	isWriting     atomic.Bool    // for best-effort concurrent write detection
 
 	writeErrMu sync.Mutex
 	writeErr   error
@@ -627,18 +628,15 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 	// Write the buffers to the connection with best-effort detection of
 	// concurrent writes. See the concurrency section in the package
 	// documentation for more info.
-
-	if c.isWriting {
+	if !c.isWriting.CompareAndSwap(false, true) {
 		panic("concurrent write to websocket connection")
 	}
-	c.isWriting = true
 
 	err := c.write(w.frameType, c.writeDeadline, c.writeBuf[framePos:w.pos], extra)
 
-	if !c.isWriting {
+	if !c.isWriting.CompareAndSwap(true, false) {
 		panic("concurrent write to websocket connection")
 	}
-	c.isWriting = false
 
 	if err != nil {
 		return w.endMessage(err)
@@ -756,15 +754,15 @@ func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 	if err != nil {
 		return err
 	}
-	if c.isWriting {
+	if !c.isWriting.CompareAndSwap(false, true) {
 		panic("concurrent write to websocket connection")
 	}
-	c.isWriting = true
+
 	err = c.write(frameType, c.writeDeadline, frameData, nil)
-	if !c.isWriting {
+
+	if !c.isWriting.CompareAndSwap(true, false) {
 		panic("concurrent write to websocket connection")
 	}
-	c.isWriting = false
 	return err
 }
 
