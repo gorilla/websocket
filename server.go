@@ -34,6 +34,7 @@ type Upgrader struct {
 	// size is zero, then buffers allocated by the HTTP server are used. The
 	// I/O buffer sizes do not limit the size of the messages that can be sent
 	// or received.
+	// The default value is 4096 bytes, 4kb.
 	ReadBufferSize, WriteBufferSize int
 
 	// WriteBufferPool is a pool of buffers for write operations. If the value
