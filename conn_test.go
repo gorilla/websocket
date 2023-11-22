@@ -54,6 +54,7 @@ func newTestConn(r io.Reader, w io.Writer, isServer bool) *Conn {
 }
 
 func TestFraming(t *testing.T) {
+	t.Parallel()
 	frameSizes := []int{
 		0, 1, 2, 124, 125, 126, 127, 128, 129, 65534, 65535,
 		// 65536, 65537
@@ -148,6 +149,7 @@ func TestFraming(t *testing.T) {
 }
 
 func TestControl(t *testing.T) {
+	t.Parallel()
 	const message = "this is a ping/pong messsage"
 	for _, isServer := range []bool{true, false} {
 		for _, isWriteControl := range []bool{true, false} {
@@ -204,6 +206,7 @@ func (p *simpleBufferPool) Put(v interface{}) {
 }
 
 func TestWriteBufferPool(t *testing.T) {
+	t.Parallel()
 	const message = "Now is the time for all good people to come to the aid of the party."
 
 	var buf bytes.Buffer
@@ -282,6 +285,7 @@ func TestWriteBufferPool(t *testing.T) {
 
 // TestWriteBufferPoolSync ensures that *sync.Pool works as a buffer pool.
 func TestWriteBufferPoolSync(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	var pool sync.Pool
 	wc := newConn(fakeNetConn{Writer: &buf}, true, 1024, 1024, &pool, nil, nil)
@@ -310,6 +314,7 @@ func (ew errorWriter) Write(p []byte) (int, error) { return 0, errors.New("error
 // TestWriteBufferPoolError ensures that buffer is returned to pool after error
 // on write.
 func TestWriteBufferPoolError(t *testing.T) {
+	t.Parallel()
 
 	// Part 1: Test NextWriter/Write/Close
 
@@ -353,6 +358,7 @@ func TestWriteBufferPoolError(t *testing.T) {
 }
 
 func TestCloseFrameBeforeFinalMessageFrame(t *testing.T) {
+	t.Parallel()
 	const bufSize = 512
 
 	expectedErr := &CloseError{Code: CloseNormalClosure, Text: "hello"}
@@ -385,6 +391,7 @@ func TestCloseFrameBeforeFinalMessageFrame(t *testing.T) {
 }
 
 func TestEOFWithinFrame(t *testing.T) {
+	t.Parallel()
 	const bufSize = 64
 
 	for n := 0; ; n++ {
@@ -422,6 +429,7 @@ func TestEOFWithinFrame(t *testing.T) {
 }
 
 func TestEOFBeforeFinalFrame(t *testing.T) {
+	t.Parallel()
 	const bufSize = 512
 
 	var b1, b2 bytes.Buffer
@@ -448,6 +456,7 @@ func TestEOFBeforeFinalFrame(t *testing.T) {
 }
 
 func TestWriteAfterMessageWriterClose(t *testing.T) {
+	t.Parallel()
 	wc := newTestConn(nil, &bytes.Buffer{}, false)
 	w, _ := wc.NextWriter(BinaryMessage)
 	if _, err := io.WriteString(w, "hello"); err != nil {
@@ -478,6 +487,7 @@ func TestWriteAfterMessageWriterClose(t *testing.T) {
 }
 
 func TestWriteHandlerDoesNotReturnErrCloseSent(t *testing.T) {
+	t.Parallel()
 	var b1, b2 bytes.Buffer
 
 	client := newTestConn(&b2, &b1, false)
@@ -498,6 +508,7 @@ func TestWriteHandlerDoesNotReturnErrCloseSent(t *testing.T) {
 }
 
 func TestReadLimit(t *testing.T) {
+	t.Parallel()
 	t.Run("Test ReadLimit is enforced", func(t *testing.T) {
 		const readLimit = 512
 		message := make([]byte, readLimit+1)
@@ -596,6 +607,7 @@ func TestReadLimit(t *testing.T) {
 }
 
 func TestAddrs(t *testing.T) {
+	t.Parallel()
 	c := newTestConn(nil, nil, true)
 	if c.LocalAddr() != localAddr {
 		t.Errorf("LocalAddr = %v, want %v", c.LocalAddr(), localAddr)
@@ -606,6 +618,7 @@ func TestAddrs(t *testing.T) {
 }
 
 func TestDeprecatedUnderlyingConn(t *testing.T) {
+	t.Parallel()
 	var b1, b2 bytes.Buffer
 	fc := fakeNetConn{Reader: &b1, Writer: &b2}
 	c := newConn(fc, true, 1024, 1024, nil, nil, nil)
@@ -616,6 +629,7 @@ func TestDeprecatedUnderlyingConn(t *testing.T) {
 }
 
 func TestNetConn(t *testing.T) {
+	t.Parallel()
 	var b1, b2 bytes.Buffer
 	fc := fakeNetConn{Reader: &b1, Writer: &b2}
 	c := newConn(fc, true, 1024, 1024, nil, nil, nil)
@@ -626,6 +640,7 @@ func TestNetConn(t *testing.T) {
 }
 
 func TestBufioReadBytes(t *testing.T) {
+	t.Parallel()
 	// Test calling bufio.ReadBytes for value longer than read buffer size.
 
 	m := make([]byte, 512)
@@ -668,6 +683,7 @@ var closeErrorTests = []struct {
 }
 
 func TestCloseError(t *testing.T) {
+	t.Parallel()
 	for _, tt := range closeErrorTests {
 		ok := IsCloseError(tt.err, tt.codes...)
 		if ok != tt.ok {
@@ -688,6 +704,7 @@ var unexpectedCloseErrorTests = []struct {
 }
 
 func TestUnexpectedCloseErrors(t *testing.T) {
+	t.Parallel()
 	for _, tt := range unexpectedCloseErrorTests {
 		ok := IsUnexpectedCloseError(tt.err, tt.codes...)
 		if ok != tt.ok {
@@ -709,6 +726,7 @@ func (w blockingWriter) Write(p []byte) (int, error) {
 }
 
 func TestConcurrentWritePanic(t *testing.T) {
+	t.Parallel()
 	w := blockingWriter{make(chan struct{}), make(chan struct{})}
 	c := newTestConn(nil, w, false)
 	go func() {
@@ -740,6 +758,7 @@ func (r failingReader) Read(p []byte) (int, error) {
 }
 
 func TestFailedConnectionReadPanic(t *testing.T) {
+	t.Parallel()
 	c := newTestConn(failingReader{}, nil, false)
 
 	defer func() {
