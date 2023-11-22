@@ -12,6 +12,7 @@ type nopCloser struct{ io.Writer }
 func (nopCloser) Close() error { return nil }
 
 func TestTruncWriter(t *testing.T) {
+	t.Parallel()
 	const data = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijlkmnopqrstuvwxyz987654321"
 	for n := 1; n <= 10; n++ {
 		var b bytes.Buffer
@@ -71,6 +72,7 @@ func BenchmarkWriteWithCompression(b *testing.B) {
 }
 
 func TestValidCompressionLevel(t *testing.T) {
+	t.Parallel()
 	c := newTestConn(nil, nil, false)
 	for _, level := range []int{minCompressionLevel - 1, maxCompressionLevel + 1} {
 		if err := c.SetCompressionLevel(level); err == nil {

@@ -13,6 +13,7 @@ import (
 )
 
 func TestJSON(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	wc := newTestConn(nil, &buf, true)
 	rc := newTestConn(&buf, nil, false)
@@ -38,6 +39,7 @@ func TestJSON(t *testing.T) {
 }
 
 func TestPartialJSONRead(t *testing.T) {
+	t.Parallel()
 	var buf0, buf1 bytes.Buffer
 	wc := newTestConn(nil, &buf0, true)
 	rc := newTestConn(&buf0, &buf1, false)
@@ -91,6 +93,7 @@ func TestPartialJSONRead(t *testing.T) {
 }
 
 func TestDeprecatedJSON(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	wc := newTestConn(nil, &buf, true)
 	rc := newTestConn(&buf, nil, false)

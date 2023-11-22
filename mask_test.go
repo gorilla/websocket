@@ -29,6 +29,7 @@ func notzero(b []byte) int {
 }
 
 func TestMaskBytes(t *testing.T) {
+	t.Parallel()
 	key := [4]byte{1, 2, 3, 4}
 	for size := 1; size <= 1024; size++ {
 		for align := 0; align < wordSize; align++ {
