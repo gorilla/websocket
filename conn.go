@@ -10,7 +10,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -490,9 +489,7 @@ func (c *Conn) beginMessage(mw *messageWriter, messageType int) error {
 	// probably better to return an error in this situation, but we cannot
 	// change this without breaking existing applications.
 	if c.writer != nil {
-		if err := c.writer.Close(); err != nil {
-			log.Printf("websocket: discarding writer close error: %v", err)
-		}
+		_ = c.writer.Close()
 		c.writer = nil
 	}
 
@@ -1021,9 +1018,7 @@ func (c *Conn) handleProtocolError(message string) error {
 func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 	// Close previous reader, only relevant for decompression.
 	if c.reader != nil {
-		if err := c.reader.Close(); err != nil {
-			log.Printf("websocket: discarding reader close error: %v", err)
-		}
+		_ = c.reader.Close()
 		c.reader = nil
 	}
 

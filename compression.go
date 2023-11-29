@@ -8,7 +8,6 @@ import (
 	"compress/flate"
 	"errors"
 	"io"
-	"log"
 	"strings"
 	"sync"
 )
@@ -135,9 +134,7 @@ func (r *flateReadWrapper) Read(p []byte) (int, error) {
 		// Preemptively place the reader back in the pool. This helps with
 		// scenarios where the application does not call NextReader() soon after
 		// this final read.
-		if err := r.Close(); err != nil {
-			log.Printf("websocket: flateReadWrapper.Close() returned error: %v", err)
-		}
+		_ = r.Close()
 	}
 	return n, err
 }
