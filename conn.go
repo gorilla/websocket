@@ -446,13 +446,18 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 		}
 	}
 
-	timer := time.NewTimer(d)
 	select {
 	case <-c.mu:
-		timer.Stop()
-	case <-timer.C:
-		return errWriteTimeout
+	default:
+		timer := time.NewTimer(d)
+		select {
+		case <-c.mu:
+			timer.Stop()
+		case <-timer.C:
+			return errWriteTimeout
+		}
 	}
+
 	defer func() { c.mu <- struct{}{} }()
 
 	c.writeErrMu.Lock()
