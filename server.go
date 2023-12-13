@@ -173,10 +173,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	}
 
 	netConn, brw, err := http.NewResponseController(w).Hijack()
-	switch {
-	case errors.Is(err, errors.ErrUnsupported):
-		return u.returnError(w, r, http.StatusInternalServerError, "websocket: response does not implement http.Hijacker")
-	case err != nil:
+	if err != nil {
 		return u.returnError(w, r, http.StatusInternalServerError, err.Error())
 	}
 
