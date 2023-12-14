@@ -31,8 +31,8 @@ func main() {
 	flag.Parse()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	hub := newHub(ctx)
-	go hub.run()
+	hub := newHub()
+	go hub.run(ctx)
 	http.HandleFunc("/", serveHome)
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		serveWs(hub, w, r)
