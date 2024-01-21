@@ -7,6 +7,7 @@ package websocket
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -48,6 +49,7 @@ type Upgrader struct {
 	// WriteBufferSize.
 	WriteBufferPool BufferPool
 
+	// Subprotocols have lower priority than NegotiateSuprotocol.
 	// Subprotocols specifies the server's supported protocols in order of
 	// preference. If this field is not nil, then the Upgrade method negotiates a
 	// subprotocol by selecting the first match in this list with a protocol
@@ -74,6 +76,14 @@ type Upgrader struct {
 	// guarantee that compression will be supported. Currently only "no context
 	// takeover" modes are supported.
 	EnableCompression bool
+
+	// NegotiateSubprotocol has higher priority than Subprotocols.
+	// NegotiateSubprotocol returns the negotiated subprotocol for the handshake
+	// request. If the returned string is "", then the the Sec-Websocket-Protocol header
+	// is not included in the handshake response.  If the function returns an error, then
+	// Upgrade responds to the client with http.StatusBadRequest.
+	// If this function is not nil, then the Upgrader.Subportocols field is ignored.
+	NegotiateSubprotocol func(r *http.Request) (string, error)
 }
 
 func (u *Upgrader) returnError(w http.ResponseWriter, r *http.Request, status int, reason string) (*Conn, error) {
@@ -100,7 +110,7 @@ func checkSameOrigin(r *http.Request) bool {
 	return equalASCIIFold(u.Host, r.Host)
 }
 
-func (u *Upgrader) selectSubprotocol(r *http.Request, responseHeader http.Header) string {
+func (u *Upgrader) selectSubprotocol(r *http.Request) string {
 	if u.Subprotocols != nil {
 		clientProtocols := Subprotocols(r)
 		for _, clientProtocol := range clientProtocols {
@@ -110,8 +120,6 @@ func (u *Upgrader) selectSubprotocol(r *http.Request, responseHeader http.Header
 				}
 			}
 		}
-	} else if responseHeader != nil {
-		return responseHeader.Get("Sec-Websocket-Protocol")
 	}
 	return ""
 }
@@ -119,11 +127,16 @@ func (u *Upgrader) selectSubprotocol(r *http.Request, responseHeader http.Header
 // Upgrade upgrades the HTTP server connection to the WebSocket protocol.
 //
 // The responseHeader is included in the response to the client's upgrade
+
 // request. Use the responseHeader to specify cookies (Set-Cookie). To specify
 // subprotocols supported by the server, set Upgrader.Subprotocols directly.
 //
 // If the upgrade fails, then Upgrade replies to the client with an HTTP error
 // response.
+//
+// The responseHeader does not support negotiated subprotocol(Sec-Websocket-Protocol)
+// IF necessary,please use Upgrader.NegotiateSubprotocol and Upgrader.Subprotocols
+// Use the method to view the Upgrader struct.
 func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*Conn, error) {
 	const badHandshake = "websocket: the client is not using the websocket protocol: "
 
@@ -160,7 +173,16 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		return u.returnError(w, r, http.StatusBadRequest, "websocket: not a websocket handshake: 'Sec-WebSocket-Key' header must be Base64 encoded value of 16-byte in length")
 	}
 
-	subprotocol := u.selectSubprotocol(r, responseHeader)
+	subprotocol := ""
+	if u.NegotiateSubprotocol != nil {
+		str, err := u.NegotiateSubprotocol(r)
+		if err != nil {
+			return u.returnError(w, r, http.StatusBadRequest, fmt.Sprintf("websocket:handshake negotiation protocol error:%s", err))
+		}
+		subprotocol = str
+	} else {
+		subprotocol = u.selectSubprotocol(r)
+	}
 
 	// Negotiate PMCE
 	var compress bool
