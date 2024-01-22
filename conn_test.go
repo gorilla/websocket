@@ -148,6 +148,31 @@ func TestFraming(t *testing.T) {
 	}
 }
 
+func TestConcurrencyWriteControl(t *testing.T) {
+	const message = "this is a ping/pong messsage"
+	loop := 10
+	workers := 10
+	for i := 0; i < loop; i++ {
+		var connBuf bytes.Buffer
+
+		wg := sync.WaitGroup{}
+		wc := newTestConn(nil, &connBuf, true)
+
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := wc.WriteControl(PongMessage, []byte(message), time.Now().Add(time.Second)); err != nil {
+					t.Errorf("concurrently wc.WriteControl() returned %v", err)
+				}
+			}()
+		}
+
+		wg.Wait()
+		wc.Close()
+	}
+}
+
 func TestControl(t *testing.T) {
 	t.Parallel()
 	const message = "this is a ping/pong messsage"
