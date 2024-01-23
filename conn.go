@@ -1263,3 +1263,15 @@ func FormatCloseMessage(closeCode int, text string) []byte {
 	copy(buf[2:], text)
 	return buf
 }
+
+var messageTypes = map[int]string{
+	TextMessage:   "TextMessage",
+	BinaryMessage: "BinaryMessage",
+	CloseMessage:  "CloseMessage",
+	PingMessage:   "PingMessage",
+	PongMessage:   "PongMessage",
+}
+
+func FormatMessageType(mt int) string {
+	return messageTypes[mt]
+}
