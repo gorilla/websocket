@@ -797,3 +797,20 @@ func TestFailedConnectionReadPanic(t *testing.T) {
 	}
 	t.Fatal("should not get here")
 }
+
+func TestFormatMessageType(t *testing.T) {
+	str := FormatMessageType(TextMessage)
+	if str != messageTypes[TextMessage] {
+		t.Error("failed to format message type")
+	}
+
+	str = FormatMessageType(CloseMessage)
+	if str != messageTypes[CloseMessage] {
+		t.Error("failed to format message type")
+	}
+
+	str = FormatMessageType(123)
+	if str != messageTypes[123] {
+		t.Error("failed to format message type")
+	}
+}
