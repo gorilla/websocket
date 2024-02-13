@@ -823,7 +823,6 @@ func (r fakeNetClosedReader) Read([]byte) (int, error) {
 }
 
 func TestConnectionClosed(t *testing.T) {
-	t.Parallel()
 	var b1, b2 bytes.Buffer
 
 	client := newTestConn(fakeNetClosedReader{}, &b1, false)
