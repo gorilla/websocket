@@ -36,10 +36,7 @@ func main() {
 	}
 	defer c.Close()
 
-	done := make(chan struct{})
-
 	go func() {
-		defer close(done)
 		for {
 			_, message, err := c.ReadMessage()
 			if err != nil {
@@ -55,8 +52,6 @@ func main() {
 
 	for {
 		select {
-		case <-done:
-			return
 		case t := <-ticker.C:
 			err := c.WriteMessage(websocket.TextMessage, []byte(t.String()))
 			if err != nil {
@@ -73,10 +68,7 @@ func main() {
 				log.Println("write close:", err)
 				return
 			}
-			select {
-			case <-done:
-			case <-time.After(time.Second):
-			}
+			<-time.After(time.Second)
 			return
 		}
 	}
