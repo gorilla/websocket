@@ -430,10 +430,10 @@ func TestDialBadOrigin(t *testing.T) {
 		ws.Close()
 		t.Fatalf("Dial: nil")
 	}
-	if resp == nil {
+	if resp == nil { // nolint:staticcheck
 		t.Fatalf("resp=nil, err=%v", err)
 	}
-	if resp.StatusCode != http.StatusForbidden {
+	if resp.StatusCode != http.StatusForbidden { // nolint:staticcheck
 		t.Fatalf("status=%d, want %d", resp.StatusCode, http.StatusForbidden)
 	}
 }
@@ -551,11 +551,11 @@ func TestRespOnBadHandshake(t *testing.T) {
 		t.Fatalf("Dial: nil")
 	}
 
-	if resp == nil {
+	if resp == nil { // nolint:staticcheck
 		t.Fatalf("resp=nil, err=%v", err)
 	}
 
-	if resp.StatusCode != expectedStatus {
+	if resp.StatusCode != expectedStatus { // nolint:staticcheck
 		t.Errorf("resp.StatusCode=%d, want %d", resp.StatusCode, expectedStatus)
 	}
 

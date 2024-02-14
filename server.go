@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -180,10 +179,10 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	}
 
 	if brw.Reader.Buffered() > 0 {
-		if err := netConn.Close(); err != nil {
-			log.Printf("websocket: failed to close network connection: %v", err)
-		}
-		return nil, errors.New("websocket: client sent data before handshake is complete")
+		return nil, errors.Join(
+			errors.New("websocket: client sent data before handshake is complete"),
+			netConn.Close(),
+		)
 	}
 
 	var br *bufio.Reader
@@ -248,32 +247,20 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 
 	// Clear deadlines set by HTTP server.
 	if err := netConn.SetDeadline(time.Time{}); err != nil {
-		if err := netConn.Close(); err != nil {
-			log.Printf("websocket: failed to close network connection: %v", err)
-		}
-		return nil, err
+		return nil, errors.Join(err, netConn.Close())
 	}
 
 	if u.HandshakeTimeout > 0 {
 		if err := netConn.SetWriteDeadline(time.Now().Add(u.HandshakeTimeout)); err != nil {
-			if err := netConn.Close(); err != nil {
-				log.Printf("websocket: failed to close network connection: %v", err)
-			}
-			return nil, err
+			return nil, errors.Join(err, netConn.Close())
 		}
 	}
 	if _, err = netConn.Write(p); err != nil {
-		if err := netConn.Close(); err != nil {
-			log.Printf("websocket: failed to close network connection: %v", err)
-		}
-		return nil, err
+		return nil, errors.Join(err, netConn.Close())
 	}
 	if u.HandshakeTimeout > 0 {
 		if err := netConn.SetWriteDeadline(time.Time{}); err != nil {
-			if err := netConn.Close(); err != nil {
-				log.Printf("websocket: failed to close network connection: %v", err)
-			}
-			return nil, err
+			return nil, errors.Join(err, netConn.Close())
 		}
 	}
 
@@ -376,7 +363,7 @@ func bufioWriterBuffer(originalWriter io.Writer, bw *bufio.Writer) []byte {
 		panic(err)
 	}
 	if err := bw.Flush(); err != nil {
-		log.Printf("websocket: bufioWriterBuffer: Flush: %v", err)
+		panic(err)
 	}
 
 	bw.Reset(originalWriter)

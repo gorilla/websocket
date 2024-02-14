@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 
 	"net"
 	"net/http"
@@ -294,10 +293,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 			}
 			err = c.SetDeadline(deadline)
 			if err != nil {
-				if err := c.Close(); err != nil {
-					log.Printf("websocket: failed to close network connection: %v", err)
-				}
-				return nil, err
+				return nil, errors.Join(err, c.Close())
 			}
 			return c, nil
 		}
@@ -336,9 +332,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 
 	defer func() {
 		if netConn != nil {
-			if err := netConn.Close(); err != nil {
-				log.Printf("websocket: failed to close network connection: %v", err)
-			}
+			netConn.Close() //#nosec:G104 (CWE-703)
 		}
 	}()
 
@@ -433,7 +427,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		return nil, nil, err
 	}
 	netConn = nil // to avoid close in defer.
-	return conn, resp, nil
+	return conn, resp, err
 }
 
 func cloneTLSConfig(cfg *tls.Config) *tls.Config {
