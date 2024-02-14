@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"encoding/base64"
 	"errors"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -58,10 +57,7 @@ func (hpd *httpProxyDialer) Dial(network string, addr string) (net.Conn, error) 
 	}
 
 	if err := connectReq.Write(conn); err != nil {
-		if err := conn.Close(); err != nil {
-			log.Printf("httpProxyDialer: failed to close connection: %v", err)
-		}
-		return nil, err
+		return nil, errors.Join(err, conn.Close())
 	}
 
 	// Read response. It's OK to use and discard buffered reader here becaue
@@ -69,18 +65,12 @@ func (hpd *httpProxyDialer) Dial(network string, addr string) (net.Conn, error) 
 	br := bufio.NewReader(conn)
 	resp, err := http.ReadResponse(br, connectReq)
 	if err != nil {
-		if err := conn.Close(); err != nil {
-			log.Printf("httpProxyDialer: failed to close connection: %v", err)
-		}
-		return nil, err
+		return nil, errors.Join(err, conn.Close())
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		if err := conn.Close(); err != nil {
-			log.Printf("httpProxyDialer: failed to close connection: %v", err)
-		}
 		f := strings.SplitN(resp.Status, " ", 2)
-		return nil, errors.New(f[1])
+		return nil, errors.Join(errors.New(f[1]), conn.Close())
 	}
 	return conn, nil
 }
