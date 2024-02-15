@@ -814,3 +814,25 @@ func TestFormatMessageType(t *testing.T) {
 		t.Error("failed to format message type")
 	}
 }
+
+type fakeNetClosedReader struct {
+}
+
+func (r fakeNetClosedReader) Read([]byte) (int, error) {
+	return 0, net.ErrClosed
+}
+
+func TestConnectionClosed(t *testing.T) {
+	var b1, b2 bytes.Buffer
+
+	client := newTestConn(fakeNetClosedReader{}, &b1, false)
+	server := newTestConn(fakeNetClosedReader{}, &b2, true)
+
+	if _, _, err := server.NextReader(); !errors.Is(err, net.ErrClosed) {
+		t.Fatalf("server expects a net.ErrClosed error, %v returned", err)
+	}
+
+	if _, _, err := client.NextReader(); !errors.Is(err, net.ErrClosed) {
+		t.Fatalf("client expects a net.ErrClosed error, %v returned", err)
+	}
+}
