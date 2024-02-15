@@ -446,23 +446,24 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 		maskBytes(key, 0, buf[6:])
 	}
 
-	d := 1000 * time.Hour
-	if !deadline.IsZero() {
-		d = time.Until(deadline)
+	if deadline.IsZero() {
+		// No timeout for zero time.
+		<-c.mu
+	} else {
+		d := time.Until(deadline)
 		if d < 0 {
 			return errWriteTimeout
 		}
-	}
-
-	select {
-	case <-c.mu:
-	default:
-		timer := time.NewTimer(d)
 		select {
 		case <-c.mu:
-			timer.Stop()
-		case <-timer.C:
-			return errWriteTimeout
+		default:
+			timer := time.NewTimer(d)
+			select {
+			case <-c.mu:
+				timer.Stop()
+			case <-timer.C:
+				return errWriteTimeout
+			}
 		}
 	}
 
