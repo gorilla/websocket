@@ -148,6 +148,22 @@ func TestFraming(t *testing.T) {
 	}
 }
 
+func TestWriteControlDeadline(t *testing.T) {
+	t.Parallel()
+	message := []byte("hello")
+	var connBuf bytes.Buffer
+	c := newTestConn(nil, &connBuf, true)
+	if err := c.WriteControl(PongMessage, message, time.Time{}); err != nil {
+		t.Errorf("WriteControl(..., zero deadline) = %v, want nil", err)
+	}
+	if err := c.WriteControl(PongMessage, message, time.Now().Add(time.Second)); err != nil {
+		t.Errorf("WriteControl(..., future deadline) = %v, want nil", err)
+	}
+	if err := c.WriteControl(PongMessage, message, time.Now().Add(-time.Second)); err == nil {
+		t.Errorf("WriteControl(..., past deadline) = nil, want timeout error")
+	}
+}
+
 func TestConcurrencyWriteControl(t *testing.T) {
 	const message = "this is a ping/pong messsage"
 	loop := 10
