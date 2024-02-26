@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -42,10 +43,18 @@ type Client struct {
 	hub *Hub
 
 	// The websocket connection.
-	conn *websocket.Conn
+	conn      *websocket.Conn
+	closeOnce sync.Once
 
 	// Buffered channel of outbound messages.
 	send chan []byte
+}
+
+func (c *Client) closeConn() (err error) {
+	c.closeOnce.Do(func() {
+		err = c.conn.Close()
+	})
+	return err
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -56,7 +65,7 @@ type Client struct {
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
-		c.conn.Close()
+		c.closeConn()
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -83,7 +92,7 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		c.closeConn()
 	}()
 	for {
 		select {
