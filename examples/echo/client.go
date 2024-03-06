@@ -41,12 +41,16 @@ func main() {
 	go func() {
 		defer close(done)
 		for {
-			mt, message, err := c.ReadMessage()
+			messageType, message, err := c.ReadMessage()
 			if err != nil {
 				log.Println("read:", err)
 				return
 			}
-			log.Printf("recv: %s, type: %s", message, websocket.FormatMessageType(mt))
+			if messageType == websocket.TextMessage {
+				log.Printf("received text message: %s", message)
+			} else if messageType == websocket.BinaryMessage {
+				log.Printf("received binary message: %s", message)
+			}
 		}
 	}()
 
@@ -68,7 +72,10 @@ func main() {
 
 			// Cleanly close the connection by sending a close message and then
 			// waiting (with timeout) for the server to close the connection.
-			err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			err := c.WriteMessage(
+				websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
+			)
 			if err != nil {
 				log.Println("write close:", err)
 				return

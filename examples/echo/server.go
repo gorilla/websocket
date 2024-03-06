@@ -28,14 +28,18 @@ func echo(w http.ResponseWriter, r *http.Request) {
 	}
 	defer c.Close()
 	for {
-		mt, message, err := c.ReadMessage()
+		messageType, message, err := c.ReadMessage()
 		if err != nil {
 			log.Println("read:", err)
 			break
 		}
 
-		log.Printf("recv: %s, type: %s", message, websocket.FormatMessageType(mt))
-		err = c.WriteMessage(mt, message)
+		if messageType == websocket.TextMessage {
+			log.Printf("received text message: %s", message)
+		} else if messageType == websocket.BinaryMessage {
+			log.Printf("received binary message: %s", message)
+		}
+		err = c.WriteMessage(messageType, message)
 		if err != nil {
 			log.Println("write:", err)
 			break
@@ -60,7 +64,7 @@ var homeTemplate = template.Must(template.New("").Parse(`
 <html>
 <head>
 <meta charset="utf-8">
-<script>  
+<script>
 window.addEventListener("load", function(evt) {
 
     var output = document.getElementById("output");
@@ -118,8 +122,8 @@ window.addEventListener("load", function(evt) {
 <body>
 <table>
 <tr><td valign="top" width="50%">
-<p>Click "Open" to create a connection to the server, 
-"Send" to send a message to the server and "Close" to close the connection. 
+<p>Click "Open" to create a connection to the server,
+"Send" to send a message to the server and "Close" to close the connection.
 You can change the message and send multiple times.
 <p>
 <form>
