@@ -934,9 +934,7 @@ func (c *Conn) advanceFrame() (int, error) {
 		}
 
 		if c.readLimit > 0 && c.readLength > c.readLimit {
-			if err := c.WriteControl(CloseMessage, FormatCloseMessage(CloseMessageTooBig, ""), time.Now().Add(writeWait)); err != nil {
-				return noFrame, err
-			}
+			c.WriteControl(CloseMessage, FormatCloseMessage(CloseMessageTooBig, ""), time.Now().Add(writeWait)) //#nosec G104 (CWE-703): Errors unhandled
 			return noFrame, ErrReadLimit
 		}
 
@@ -997,9 +995,7 @@ func (c *Conn) handleProtocolError(message string) error {
 	if len(data) > maxControlFramePayloadSize {
 		data = data[:maxControlFramePayloadSize]
 	}
-	if err := c.WriteControl(CloseMessage, data, time.Now().Add(writeWait)); err != nil {
-		return err
-	}
+	c.WriteControl(CloseMessage, data, time.Now().Add(writeWait)) //#nosec G104 (CWE-703): Errors unhandled
 	return errors.New("websocket: " + message)
 }
 

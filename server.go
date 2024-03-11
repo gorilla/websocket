@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -179,10 +180,10 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	}
 
 	if brw.Reader.Buffered() > 0 {
-		return nil, errors.Join(
-			errors.New("websocket: client sent data before handshake is complete"),
-			netConn.Close(),
-		)
+		// As mentioned in https://github.com/gorilla/websocket/pull/897#issuecomment-1947108098:
+		// It's safe to ignore the errors for netconn.Close()
+		netConn.Close() //#nosec G104 (CWE-703): Errors unhandled
+		return nil, errors.New("websocket: client sent data before handshake is complete")
 	}
 
 	var br *bufio.Reader
@@ -247,20 +248,24 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 
 	// Clear deadlines set by HTTP server.
 	if err := netConn.SetDeadline(time.Time{}); err != nil {
-		return nil, errors.Join(err, netConn.Close())
+		netConn.Close() //#nosec G104 (CWE-703): Errors unhandled
+		return nil, err
 	}
 
 	if u.HandshakeTimeout > 0 {
 		if err := netConn.SetWriteDeadline(time.Now().Add(u.HandshakeTimeout)); err != nil {
-			return nil, errors.Join(err, netConn.Close())
+			netConn.Close() //#nosec G104 (CWE-703): Errors unhandled
+			return nil, err
 		}
 	}
 	if _, err = netConn.Write(p); err != nil {
-		return nil, errors.Join(err, netConn.Close())
+		netConn.Close() //#nosec G104 (CWE-703): Errors unhandled
+		return nil, err
 	}
 	if u.HandshakeTimeout > 0 {
 		if err := netConn.SetWriteDeadline(time.Time{}); err != nil {
-			return nil, errors.Join(err, netConn.Close())
+			netConn.Close() //#nosec G104 (CWE-703): Errors unhandled
+			return nil, err
 		}
 	}
 
@@ -363,7 +368,7 @@ func bufioWriterBuffer(originalWriter io.Writer, bw *bufio.Writer) []byte {
 		panic(err)
 	}
 	if err := bw.Flush(); err != nil {
-		panic(err)
+		log.Printf("websocket: bufioWriterBuffer: Flush: %v", err)
 	}
 
 	bw.Reset(originalWriter)

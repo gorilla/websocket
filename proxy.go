@@ -57,7 +57,10 @@ func (hpd *httpProxyDialer) Dial(network string, addr string) (net.Conn, error) 
 	}
 
 	if err := connectReq.Write(conn); err != nil {
-		return nil, errors.Join(err, conn.Close())
+		// As mentioned in https://github.com/gorilla/websocket/pull/897#issuecomment-1947108098:
+		// It's safe to ignore the errors for conn.Close()
+		conn.Close() //#nosec G104 (CWE-703): Errors unhandled
+		return nil, err
 	}
 
 	// Read response. It's OK to use and discard buffered reader here becaue
@@ -65,12 +68,14 @@ func (hpd *httpProxyDialer) Dial(network string, addr string) (net.Conn, error) 
 	br := bufio.NewReader(conn)
 	resp, err := http.ReadResponse(br, connectReq)
 	if err != nil {
-		return nil, errors.Join(err, conn.Close())
+		conn.Close() //#nosec G104 (CWE-703): Errors unhandled
+		return nil, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		conn.Close() //#nosec G104 (CWE-703): Errors unhandled
 		f := strings.SplitN(resp.Status, " ", 2)
-		return nil, errors.Join(errors.New(f[1]), conn.Close())
+		return nil, errors.New(f[1])
 	}
 	return conn, nil
 }
