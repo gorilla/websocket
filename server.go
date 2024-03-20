@@ -180,9 +180,9 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	}
 
 	if brw.Reader.Buffered() > 0 {
-		if err := netConn.Close(); err != nil {
-			log.Printf("websocket: failed to close network connection: %v", err)
-		}
+		// As mentioned in https://github.com/gorilla/websocket/pull/897#issuecomment-1947108098:
+		// It's safe to ignore the errors for netconn.Close()
+		netConn.Close() //#nosec G104 (CWE-703): Errors unhandled
 		return nil, errors.New("websocket: client sent data before handshake is complete")
 	}
 
@@ -248,31 +248,23 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 
 	// Clear deadlines set by HTTP server.
 	if err := netConn.SetDeadline(time.Time{}); err != nil {
-		if err := netConn.Close(); err != nil {
-			log.Printf("websocket: failed to close network connection: %v", err)
-		}
+		netConn.Close() //#nosec G104 (CWE-703): Errors unhandled
 		return nil, err
 	}
 
 	if u.HandshakeTimeout > 0 {
 		if err := netConn.SetWriteDeadline(time.Now().Add(u.HandshakeTimeout)); err != nil {
-			if err := netConn.Close(); err != nil {
-				log.Printf("websocket: failed to close network connection: %v", err)
-			}
+			netConn.Close() //#nosec G104 (CWE-703): Errors unhandled
 			return nil, err
 		}
 	}
 	if _, err = netConn.Write(p); err != nil {
-		if err := netConn.Close(); err != nil {
-			log.Printf("websocket: failed to close network connection: %v", err)
-		}
+		netConn.Close() //#nosec G104 (CWE-703): Errors unhandled
 		return nil, err
 	}
 	if u.HandshakeTimeout > 0 {
 		if err := netConn.SetWriteDeadline(time.Time{}); err != nil {
-			if err := netConn.Close(); err != nil {
-				log.Printf("websocket: failed to close network connection: %v", err)
-			}
+			netConn.Close() //#nosec G104 (CWE-703): Errors unhandled
 			return nil, err
 		}
 	}

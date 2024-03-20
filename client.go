@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 
 	"net"
 	"net/http"
@@ -294,9 +293,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 			}
 			err = c.SetDeadline(deadline)
 			if err != nil {
-				if err := c.Close(); err != nil {
-					log.Printf("websocket: failed to close network connection: %v", err)
-				}
+				c.Close() //#nosec G104 (CWE-703): Errors unhandled
 				return nil, err
 			}
 			return c, nil
@@ -336,9 +333,9 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 
 	defer func() {
 		if netConn != nil {
-			if err := netConn.Close(); err != nil {
-				log.Printf("websocket: failed to close network connection: %v", err)
-			}
+			// As mentioned in https://github.com/gorilla/websocket/pull/897#issuecomment-1947108098:
+			// It's safe to ignore the errors for netconn.Close()
+			netConn.Close() //#nosec G104 (CWE-703): Errors unhandled
 		}
 	}()
 
@@ -429,10 +426,8 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 	resp.Body = io.NopCloser(bytes.NewReader([]byte{}))
 	conn.subprotocol = resp.Header.Get("Sec-Websocket-Protocol")
 
-	if err := netConn.SetDeadline(time.Time{}); err != nil {
-		return nil, nil, err
-	}
-	netConn = nil // to avoid close in defer.
+	netConn.SetDeadline(time.Time{}) //#nosec G104 (CWE-703): Errors unhandled
+	netConn = nil                    // to avoid close in defer.
 	return conn, resp, nil
 }
 

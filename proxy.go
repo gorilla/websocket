@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"encoding/base64"
 	"errors"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -58,9 +57,9 @@ func (hpd *httpProxyDialer) Dial(network string, addr string) (net.Conn, error) 
 	}
 
 	if err := connectReq.Write(conn); err != nil {
-		if err := conn.Close(); err != nil {
-			log.Printf("httpProxyDialer: failed to close connection: %v", err)
-		}
+		// As mentioned in https://github.com/gorilla/websocket/pull/897#issuecomment-1947108098:
+		// It's safe to ignore the errors for conn.Close()
+		conn.Close() //#nosec G104 (CWE-703): Errors unhandled
 		return nil, err
 	}
 
@@ -69,16 +68,12 @@ func (hpd *httpProxyDialer) Dial(network string, addr string) (net.Conn, error) 
 	br := bufio.NewReader(conn)
 	resp, err := http.ReadResponse(br, connectReq)
 	if err != nil {
-		if err := conn.Close(); err != nil {
-			log.Printf("httpProxyDialer: failed to close connection: %v", err)
-		}
+		conn.Close() //#nosec G104 (CWE-703): Errors unhandled
 		return nil, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		if err := conn.Close(); err != nil {
-			log.Printf("httpProxyDialer: failed to close connection: %v", err)
-		}
+		conn.Close() //#nosec G104 (CWE-703): Errors unhandled
 		f := strings.SplitN(resp.Status, " ", 2)
 		return nil, errors.New(f[1])
 	}
