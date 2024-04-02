@@ -41,12 +41,12 @@ func main() {
 	go func() {
 		defer close(done)
 		for {
-			mt, message, err := c.ReadMessage()
+			_ , message, err := c.ReadMessage()
 			if err != nil {
 				log.Println("read:", err)
 				return
 			}
-			log.Printf("recv: %s, type: %s", message, websocket.FormatMessageType(mt))
+			log.Printf("recv: %s", message)
 		}
 	}()
 
