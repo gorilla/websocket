@@ -33,11 +33,6 @@ var preparedMessageTests = []struct {
 }
 
 func TestPreparedMessage(t *testing.T) {
-	testRand := rand.New(rand.NewSource(99))
-	prevMaskRand := maskRand
-	maskRand = testRand
-	defer func() { maskRand = prevMaskRand }()
-
 	for _, tt := range preparedMessageTests {
 		var data = []byte("this is a test")
 		var buf bytes.Buffer
@@ -45,13 +40,10 @@ func TestPreparedMessage(t *testing.T) {
 		if tt.enableWriteCompression {
 			c.newCompressionWriter = compressNoContextTakeover
 		}
-
-		if err := c.SetCompressionLevel(tt.compressionLevel); err != nil {
-			t.Fatal(err)
-		}
+		c.SetCompressionLevel(tt.compressionLevel)
 
 		// Seed random number generator for consistent frame mask.
-		testRand.Seed(1234)
+		rand.Seed(1234)
 
 		if err := c.WriteMessage(tt.messageType, data); err != nil {
 			t.Fatal(err)
@@ -67,7 +59,7 @@ func TestPreparedMessage(t *testing.T) {
 		copy(data, "hello world")
 
 		// Seed random number generator for consistent frame mask.
-		testRand.Seed(1234)
+		rand.Seed(1234)
 
 		buf.Reset()
 		if err := c.WritePreparedMessage(pm); err != nil {
@@ -76,7 +68,7 @@ func TestPreparedMessage(t *testing.T) {
 		got := buf.String()
 
 		if got != want {
-			t.Errorf("write message != prepared message, got %#v, want %#v", got, want)
+			t.Errorf("write message != prepared message for %+v", tt)
 		}
 	}
 }

@@ -7,10 +7,10 @@ package main
 import (
 	"flag"
 	"html/template"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -49,8 +49,7 @@ func readFileIfModified(lastMod time.Time) ([]byte, time.Time, error) {
 	if !fi.ModTime().After(lastMod) {
 		return nil, lastMod, nil
 	}
-
-	p, err := os.ReadFile(filepath.Clean(filename))
+	p, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, fi.ModTime(), err
 	}
@@ -164,11 +163,7 @@ func main() {
 	filename = flag.Args()[0]
 	http.HandleFunc("/", serveHome)
 	http.HandleFunc("/ws", serveWs)
-	server := &http.Server{
-		Addr:              *addr,
-		ReadHeaderTimeout: 3 * time.Second,
-	}
-	if err := server.ListenAndServe(); err != nil {
+	if err := http.ListenAndServe(*addr, nil); err != nil {
 		log.Fatal(err)
 	}
 }
