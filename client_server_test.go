@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -49,6 +50,7 @@ type cstHandler struct{ *testing.T }
 type cstServer struct {
 	*httptest.Server
 	URL string
+	t   *testing.T
 }
 
 const (
@@ -113,7 +115,7 @@ func (t cstHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err = io.Copy(wr, rd); err != nil {
-		t.Logf("Copy: %v", err)
+		t.Logf("NextWriter: %v", err)
 		return
 	}
 	if err := wr.Close(); err != nil {
@@ -438,7 +440,7 @@ func TestDialBadOrigin(t *testing.T) {
 	if resp == nil {
 		t.Fatalf("resp=nil, err=%v", err)
 	}
-	if resp.StatusCode != http.StatusForbidden { // nolint:staticcheck
+	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("status=%d, want %d", resp.StatusCode, http.StatusForbidden)
 	}
 }
@@ -544,7 +546,7 @@ func TestRespOnBadHandshake(t *testing.T) {
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(expectedStatus)
-		io.WriteString(w, expectedBody) // nolint:errcheck
+		io.WriteString(w, expectedBody)
 	}))
 	defer s.Close()
 
@@ -554,15 +556,15 @@ func TestRespOnBadHandshake(t *testing.T) {
 		t.Fatalf("Dial: nil")
 	}
 
-	if resp == nil { // nolint:staticcheck
+	if resp == nil {
 		t.Fatalf("resp=nil, err=%v", err)
 	}
 
-	if resp.StatusCode != expectedStatus { // nolint:staticcheck
+	if resp.StatusCode != expectedStatus {
 		t.Errorf("resp.StatusCode=%d, want %d", resp.StatusCode, expectedStatus)
 	}
 
-	p, err := io.ReadAll(resp.Body)
+	p, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("ReadFull(resp.Body) returned error %v", err)
 	}
@@ -797,7 +799,7 @@ func TestSocksProxyDial(t *testing.T) {
 		}
 		defer c1.Close()
 
-		c1.SetDeadline(time.Now().Add(30 * time.Second)) // nolint:errcheck
+		c1.SetDeadline(time.Now().Add(30 * time.Second))
 
 		buf := make([]byte, 32)
 		if _, err := io.ReadFull(c1, buf[:3]); err != nil {
@@ -836,10 +838,10 @@ func TestSocksProxyDial(t *testing.T) {
 		defer c2.Close()
 		done := make(chan struct{})
 		go func() {
-			io.Copy(c1, c2) // nolint:errcheck
+			io.Copy(c1, c2)
 			close(done)
 		}()
-		io.Copy(c2, c1) // nolint:errcheck
+		io.Copy(c2, c1)
 		<-done
 	}()
 

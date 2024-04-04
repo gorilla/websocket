@@ -6,6 +6,7 @@ package websocket
 
 import (
 	"io"
+	"io/ioutil"
 	"sync/atomic"
 	"testing"
 )
@@ -44,7 +45,7 @@ func newBroadcastConn(c *Conn) *broadcastConn {
 
 func newBroadcastBench(usePrepared, compression bool) *broadcastBench {
 	bench := &broadcastBench{
-		w:           io.Discard,
+		w:           ioutil.Discard,
 		doneCh:      make(chan struct{}),
 		closeCh:     make(chan struct{}),
 		usePrepared: usePrepared,
@@ -69,13 +70,9 @@ func (b *broadcastBench) makeConns(numConns int) {
 				select {
 				case msg := <-c.msgCh:
 					if msg.prepared != nil {
-						if err := c.conn.WritePreparedMessage(msg.prepared); err != nil {
-							panic(err)
-						}
+						c.conn.WritePreparedMessage(msg.prepared)
 					} else {
-						if err := c.conn.WriteMessage(TextMessage, msg.payload); err != nil {
-							panic(err)
-						}
+						c.conn.WriteMessage(TextMessage, msg.payload)
 					}
 					val := atomic.AddInt32(&b.count, 1)
 					if val%int32(numConns) == 0 {

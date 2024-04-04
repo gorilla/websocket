@@ -6,10 +6,11 @@ package websocket
 
 import (
 	"bufio"
-	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"io"
+	"io/ioutil"
+	"math/rand"
 	"net"
 	"strconv"
 	"strings"
@@ -180,16 +181,16 @@ var (
 	errInvalidControlFrame = errors.New("websocket: invalid control frame")
 )
 
-// maskRand is an io.Reader for generating mask bytes. The reader is initialized
-// to crypto/rand Reader. Tests swap the reader to a math/rand reader for
-// reproducible results.
-var maskRand = rand.Reader
-
-// newMaskKey returns a new 32 bit value for masking client frames.
 func newMaskKey() [4]byte {
-	var k [4]byte
-	_, _ = io.ReadFull(maskRand, k[:])
-	return k
+	n := rand.Uint32()
+	return [4]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)}
+}
+
+func hideTempErr(err error) error {
+	if e, ok := err.(net.Error); ok && e.Temporary() {
+		err = &netError{msg: e.Error(), timeout: e.Timeout()}
+	}
+	return err
 }
 
 func isControl(frameType int) bool {
@@ -370,9 +371,7 @@ func (c *Conn) read(n int) ([]byte, error) {
 	if err == io.EOF {
 		err = errUnexpectedEOF
 	}
-	if _, err := c.br.Discard(len(p)); err != nil {
-		return p, err
-	}
+	c.br.Discard(len(p))
 	return p, err
 }
 
@@ -387,9 +386,7 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 		return err
 	}
 
-	if err := c.conn.SetWriteDeadline(deadline); err != nil {
-		return c.writeFatal(err)
-	}
+	c.conn.SetWriteDeadline(deadline)
 	if len(buf1) == 0 {
 		_, err = c.conn.Write(buf0)
 	} else {
@@ -399,7 +396,7 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 		return c.writeFatal(err)
 	}
 	if frameType == CloseMessage {
-		_ = c.writeFatal(ErrCloseSent)
+		c.writeFatal(ErrCloseSent)
 	}
 	return nil
 }
@@ -438,11 +435,9 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 		maskBytes(key, 0, buf[6:])
 	}
 
-	if deadline.IsZero() {
-		// No timeout for zero time.
-		<-c.mu
-	} else {
-		d := time.Until(deadline)
+	d := 1000 * time.Hour
+	if !deadline.IsZero() {
+		d = deadline.Sub(time.Now())
 		if d < 0 {
 			return errWriteTimeout
 		}
@@ -468,15 +463,13 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 		return err
 	}
 
-	if err := c.conn.SetWriteDeadline(deadline); err != nil {
-		return c.writeFatal(err)
-	}
+	c.conn.SetWriteDeadline(deadline)
 	_, err = c.conn.Write(buf)
 	if err != nil {
 		return c.writeFatal(err)
 	}
 	if messageType == CloseMessage {
-		_ = c.writeFatal(ErrCloseSent)
+		c.writeFatal(ErrCloseSent)
 	}
 	return err
 }
@@ -487,7 +480,7 @@ func (c *Conn) beginMessage(mw *messageWriter, messageType int) error {
 	// probably better to return an error in this situation, but we cannot
 	// change this without breaking existing applications.
 	if c.writer != nil {
-		_ = c.writer.Close()
+		c.writer.Close()
 		c.writer = nil
 	}
 
@@ -640,7 +633,7 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 	}
 
 	if final {
-		_ = w.endMessage(errWriteClosed)
+		w.endMessage(errWriteClosed)
 		return nil
 	}
 
@@ -805,7 +798,7 @@ func (c *Conn) advanceFrame() (int, error) {
 	// 1. Skip remainder of previous frame.
 
 	if c.readRemaining > 0 {
-		if _, err := io.CopyN(io.Discard, c.br, c.readRemaining); err != nil {
+		if _, err := io.CopyN(ioutil.Discard, c.br, c.readRemaining); err != nil {
 			return noFrame, err
 		}
 	}
@@ -827,9 +820,7 @@ func (c *Conn) advanceFrame() (int, error) {
 	rsv2 := p[0]&rsv2Bit != 0
 	rsv3 := p[0]&rsv3Bit != 0
 	mask := p[1]&maskBit != 0
-	if err := c.setReadRemaining(int64(p[1] & 0x7f)); err != nil {
-		return noFrame, err
-	}
+	c.setReadRemaining(int64(p[1] & 0x7f))
 
 	c.readDecompress = false
 	if rsv1 {
@@ -934,7 +925,7 @@ func (c *Conn) advanceFrame() (int, error) {
 		}
 
 		if c.readLimit > 0 && c.readLength > c.readLimit {
-			c.WriteControl(CloseMessage, FormatCloseMessage(CloseMessageTooBig, ""), time.Now().Add(writeWait)) //#nosec G104 (CWE-703): Errors unhandled
+			c.WriteControl(CloseMessage, FormatCloseMessage(CloseMessageTooBig, ""), time.Now().Add(writeWait))
 			return noFrame, ErrReadLimit
 		}
 
@@ -946,9 +937,7 @@ func (c *Conn) advanceFrame() (int, error) {
 	var payload []byte
 	if c.readRemaining > 0 {
 		payload, err = c.read(int(c.readRemaining))
-		if err := c.setReadRemaining(0); err != nil {
-			return noFrame, err
-		}
+		c.setReadRemaining(0)
 		if err != nil {
 			return noFrame, err
 		}
@@ -995,7 +984,7 @@ func (c *Conn) handleProtocolError(message string) error {
 	if len(data) > maxControlFramePayloadSize {
 		data = data[:maxControlFramePayloadSize]
 	}
-	c.WriteControl(CloseMessage, data, time.Now().Add(writeWait)) //#nosec G104 (CWE-703): Errors unhandled
+	c.WriteControl(CloseMessage, data, time.Now().Add(writeWait))
 	return errors.New("websocket: " + message)
 }
 
@@ -1012,7 +1001,7 @@ func (c *Conn) handleProtocolError(message string) error {
 func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 	// Close previous reader, only relevant for decompression.
 	if c.reader != nil {
-		_ = c.reader.Close()
+		c.reader.Close()
 		c.reader = nil
 	}
 
@@ -1068,9 +1057,7 @@ func (r *messageReader) Read(b []byte) (int, error) {
 			}
 			rem := c.readRemaining
 			rem -= int64(n)
-			if err := c.setReadRemaining(rem); err != nil {
-				return 0, err
-			}
+			c.setReadRemaining(rem)
 			if c.readRemaining > 0 && c.readErr == io.EOF {
 				c.readErr = errUnexpectedEOF
 			}
@@ -1110,7 +1097,7 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 	if err != nil {
 		return messageType, nil, err
 	}
-	p, err = io.ReadAll(r)
+	p, err = ioutil.ReadAll(r)
 	return messageType, p, err
 }
 
@@ -1152,7 +1139,7 @@ func (c *Conn) SetCloseHandler(h func(code int, text string) error) {
 	if h == nil {
 		h = func(code int, text string) error {
 			message := FormatCloseMessage(code, "")
-			_ = c.WriteControl(CloseMessage, message, time.Now().Add(writeWait))
+			c.WriteControl(CloseMessage, message, time.Now().Add(writeWait))
 			return nil
 		}
 	}
@@ -1177,7 +1164,7 @@ func (c *Conn) SetPingHandler(h func(appData string) error) {
 			err := c.WriteControl(PongMessage, []byte(message), time.Now().Add(writeWait))
 			if err == ErrCloseSent {
 				return nil
-			} else if _, ok := err.(net.Error); ok {
+			} else if e, ok := err.(net.Error); ok && e.Temporary() {
 				return nil
 			}
 			return err
