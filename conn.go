@@ -6,11 +6,10 @@ package websocket
 
 import (
 	"bufio"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"io"
-	"io/ioutil"
-	"math/rand"
 	"net"
 	"strconv"
 	"strings"
@@ -181,16 +180,16 @@ var (
 	errInvalidControlFrame = errors.New("websocket: invalid control frame")
 )
 
-func newMaskKey() [4]byte {
-	n := rand.Uint32()
-	return [4]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)}
-}
+// maskRand is an io.Reader for generating mask bytes. The reader is initialized
+// to crypto/rand Reader. Tests swap the reader to a math/rand reader for
+// reproducible results.
+var maskRand = rand.Reader
 
-func hideTempErr(err error) error {
-	if e, ok := err.(net.Error); ok && e.Temporary() {
-		err = &netError{msg: e.Error(), timeout: e.Timeout()}
-	}
-	return err
+// newMaskKey returns a new 32 bit value for masking client frames.
+func newMaskKey() [4]byte {
+	var k [4]byte
+	_, _ = io.ReadFull(maskRand, k[:])
+	return k
 }
 
 func isControl(frameType int) bool {
@@ -435,9 +434,11 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 		maskBytes(key, 0, buf[6:])
 	}
 
-	d := 1000 * time.Hour
-	if !deadline.IsZero() {
-		d = deadline.Sub(time.Now())
+	if deadline.IsZero() {
+		// No timeout for zero time.
+		<-c.mu
+	} else {
+		d := time.Until(deadline)
 		if d < 0 {
 			return errWriteTimeout
 		}
@@ -798,7 +799,7 @@ func (c *Conn) advanceFrame() (int, error) {
 	// 1. Skip remainder of previous frame.
 
 	if c.readRemaining > 0 {
-		if _, err := io.CopyN(ioutil.Discard, c.br, c.readRemaining); err != nil {
+		if _, err := io.CopyN(io.Discard, c.br, c.readRemaining); err != nil {
 			return noFrame, err
 		}
 	}
@@ -1097,7 +1098,7 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 	if err != nil {
 		return messageType, nil, err
 	}
-	p, err = ioutil.ReadAll(r)
+	p, err = io.ReadAll(r)
 	return messageType, p, err
 }
 
@@ -1164,7 +1165,7 @@ func (c *Conn) SetPingHandler(h func(appData string) error) {
 			err := c.WriteControl(PongMessage, []byte(message), time.Now().Add(writeWait))
 			if err == ErrCloseSent {
 				return nil
-			} else if e, ok := err.(net.Error); ok && e.Temporary() {
+			} else if _, ok := err.(net.Error); ok {
 				return nil
 			}
 			return err
