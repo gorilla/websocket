@@ -1007,8 +1007,9 @@ func (c *Conn) handleProtocolError(message string) error {
 //
 // Applications must break out of the application's read loop when this method
 // returns a non-nil error value. Errors returned from this method are
-// permanent. Once this method returns a non-nil error, all subsequent calls to
-// this method return the same error.
+// permanent, unless explicitly cleared using ClearReadError. Once this method
+// returns a non-nil error, all subsequent calls to this method return the
+// same error.
 func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 	// Close previous reader, only relevant for decompression.
 	if c.reader != nil {
@@ -1045,6 +1046,15 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 	}
 
 	return noFrame, nil, c.readErr
+}
+
+// ClearReadError clears the read error state of the connection. This is
+// primarily useful for handling expected errors such as read timeouts with
+// non-blocking I/O. Applications must be careful to ensure errors are
+// temporary before clearing them as not doing so will lead to busy loops.
+func (c *Conn) ClearReadError() {
+	c.readErr = nil
+	c.readErrCount--
 }
 
 type messageReader struct{ c *Conn }
