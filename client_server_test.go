@@ -493,6 +493,37 @@ func TestBadMethod(t *testing.T) {
 	}
 }
 
+func TestNoUpgrade(t *testing.T) {
+	t.Parallel()
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := cstUpgrader.Upgrade(w, r, nil)
+		if err == nil {
+			t.Errorf("handshake succeeded, expect fail")
+			ws.Close()
+		}
+	}))
+	defer s.Close()
+
+	req, err := http.NewRequest(http.MethodGet, s.URL, strings.NewReader(""))
+	if err != nil {
+		t.Fatalf("NewRequest returned error %v", err)
+	}
+	req.Header.Set("Connection", "upgrade")
+	req.Header.Set("Sec-Websocket-Version", "13")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Do returned error %v", err)
+	}
+	resp.Body.Close()
+	if u := resp.Header.Get("Upgrade"); u != "websocket" {
+		t.Errorf("Uprade response header is %q, want %q", u, "websocket")
+	}
+	if resp.StatusCode != http.StatusUpgradeRequired {
+		t.Errorf("Status = %d, want %d", resp.StatusCode, http.StatusUpgradeRequired)
+	}
+}
+
 func TestDialExtraTokensInRespHeaders(t *testing.T) {
 	t.Parallel()
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
