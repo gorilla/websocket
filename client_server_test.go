@@ -11,9 +11,9 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -148,6 +148,7 @@ func sendRecv(t *testing.T, ws *Conn) {
 }
 
 func TestProxyDial(t *testing.T) {
+	t.Parallel()
 
 	s := newServer(t)
 	defer s.Close()
@@ -163,7 +164,7 @@ func TestProxyDial(t *testing.T) {
 	// Capture the request Host header.
 	s.Server.Config.Handler = http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == "CONNECT" {
+			if r.Method == http.MethodConnect {
 				connect = true
 				w.WriteHeader(http.StatusOK)
 				return
@@ -186,6 +187,7 @@ func TestProxyDial(t *testing.T) {
 }
 
 func TestProxyAuthorizationDial(t *testing.T) {
+	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -203,7 +205,7 @@ func TestProxyAuthorizationDial(t *testing.T) {
 		func(w http.ResponseWriter, r *http.Request) {
 			proxyAuth := r.Header.Get("Proxy-Authorization")
 			expectedProxyAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte("username:password"))
-			if r.Method == "CONNECT" && proxyAuth == expectedProxyAuth {
+			if r.Method == http.MethodConnect && proxyAuth == expectedProxyAuth {
 				connect = true
 				w.WriteHeader(http.StatusOK)
 				return
@@ -226,6 +228,7 @@ func TestProxyAuthorizationDial(t *testing.T) {
 }
 
 func TestDial(t *testing.T) {
+	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -238,6 +241,7 @@ func TestDial(t *testing.T) {
 }
 
 func TestDialCookieJar(t *testing.T) {
+	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -300,6 +304,7 @@ func rootCAs(t *testing.T, s *httptest.Server) *x509.CertPool {
 }
 
 func TestDialTLS(t *testing.T) {
+	t.Parallel()
 	s := newTLSServer(t)
 	defer s.Close()
 
@@ -314,6 +319,7 @@ func TestDialTLS(t *testing.T) {
 }
 
 func TestDialTimeout(t *testing.T) {
+	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -370,6 +376,7 @@ func (c *requireDeadlineNetConn) LocalAddr() net.Addr  { return c.c.LocalAddr() 
 func (c *requireDeadlineNetConn) RemoteAddr() net.Addr { return c.c.RemoteAddr() }
 
 func TestHandshakeTimeout(t *testing.T) {
+	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -386,6 +393,7 @@ func TestHandshakeTimeout(t *testing.T) {
 }
 
 func TestHandshakeTimeoutInContext(t *testing.T) {
+	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -407,6 +415,7 @@ func TestHandshakeTimeoutInContext(t *testing.T) {
 }
 
 func TestDialBadScheme(t *testing.T) {
+	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -418,6 +427,7 @@ func TestDialBadScheme(t *testing.T) {
 }
 
 func TestDialBadOrigin(t *testing.T) {
+	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -435,6 +445,7 @@ func TestDialBadOrigin(t *testing.T) {
 }
 
 func TestDialBadHeader(t *testing.T) {
+	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -454,6 +465,7 @@ func TestDialBadHeader(t *testing.T) {
 }
 
 func TestBadMethod(t *testing.T) {
+	t.Parallel()
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ws, err := cstUpgrader.Upgrade(w, r, nil)
 		if err == nil {
@@ -463,7 +475,7 @@ func TestBadMethod(t *testing.T) {
 	}))
 	defer s.Close()
 
-	req, err := http.NewRequest("POST", s.URL, strings.NewReader(""))
+	req, err := http.NewRequest(http.MethodPost, s.URL, strings.NewReader(""))
 	if err != nil {
 		t.Fatalf("NewRequest returned error %v", err)
 	}
@@ -482,6 +494,7 @@ func TestBadMethod(t *testing.T) {
 }
 
 func TestDialExtraTokensInRespHeaders(t *testing.T) {
+	t.Parallel()
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		challengeKey := r.Header.Get("Sec-Websocket-Key")
 		w.Header().Set("Upgrade", "foo, websocket")
@@ -499,6 +512,7 @@ func TestDialExtraTokensInRespHeaders(t *testing.T) {
 }
 
 func TestHandshake(t *testing.T) {
+	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -525,6 +539,7 @@ func TestHandshake(t *testing.T) {
 }
 
 func TestRespOnBadHandshake(t *testing.T) {
+	t.Parallel()
 	const expectedStatus = http.StatusGone
 	const expectedBody = "This is the response body."
 
@@ -548,7 +563,7 @@ func TestRespOnBadHandshake(t *testing.T) {
 		t.Errorf("resp.StatusCode=%d, want %d", resp.StatusCode, expectedStatus)
 	}
 
-	p, err := ioutil.ReadAll(resp.Body)
+	p, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("ReadFull(resp.Body) returned error %v", err)
 	}
@@ -569,6 +584,7 @@ func (w testLogWriter) Write(p []byte) (int, error) {
 
 // TestHost tests handling of host names and confirms that it matches net/http.
 func TestHost(t *testing.T) {
+	t.Parallel()
 
 	upgrader := Upgrader{}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -735,7 +751,7 @@ func TestHost(t *testing.T) {
 			Dial:            dialer.NetDial,
 			TLSClientConfig: dialer.TLSClientConfig,
 		}
-		req, _ := http.NewRequest("GET", httpProtos[tt.server]+tt.url+"/", nil)
+		req, _ := http.NewRequest(http.MethodGet, httpProtos[tt.server]+tt.url+"/", nil)
 		if tt.header != "" {
 			req.Host = tt.header
 		}
@@ -750,6 +766,7 @@ func TestHost(t *testing.T) {
 }
 
 func TestDialCompression(t *testing.T) {
+	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -764,6 +781,7 @@ func TestDialCompression(t *testing.T) {
 }
 
 func TestSocksProxyDial(t *testing.T) {
+	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -843,6 +861,7 @@ func TestSocksProxyDial(t *testing.T) {
 }
 
 func TestTracingDialWithContext(t *testing.T) {
+	t.Parallel()
 
 	var headersWrote, requestWrote, getConn, gotConn, connectDone, gotFirstResponseByte bool
 	trace := &httptrace.ClientTrace{
@@ -902,6 +921,7 @@ func TestTracingDialWithContext(t *testing.T) {
 }
 
 func TestEmptyTracingDialWithContext(t *testing.T) {
+	t.Parallel()
 
 	trace := &httptrace.ClientTrace{}
 	ctx := httptrace.WithClientTrace(context.Background(), trace)
@@ -919,4 +939,218 @@ func TestEmptyTracingDialWithContext(t *testing.T) {
 
 	defer ws.Close()
 	sendRecv(t, ws)
+}
+
+// TestNetDialConnect tests selection of dial method between NetDial, NetDialContext, NetDialTLS or NetDialTLSContext
+func TestNetDialConnect(t *testing.T) {
+	t.Parallel()
+
+	upgrader := Upgrader{}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if IsWebSocketUpgrade(r) {
+			c, err := upgrader.Upgrade(w, r, http.Header{"X-Test-Host": {r.Host}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.Close()
+		} else {
+			w.Header().Set("X-Test-Host", r.Host)
+		}
+	})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	tlsServer := httptest.NewTLSServer(handler)
+	defer tlsServer.Close()
+
+	testUrls := map[*httptest.Server]string{
+		server:    "ws://" + server.Listener.Addr().String() + "/",
+		tlsServer: "wss://" + tlsServer.Listener.Addr().String() + "/",
+	}
+
+	cas := rootCAs(t, tlsServer)
+	tlsConfig := &tls.Config{
+		RootCAs:            cas,
+		ServerName:         "example.com",
+		InsecureSkipVerify: false,
+	}
+
+	tests := []struct {
+		name              string
+		server            *httptest.Server // server to use
+		netDial           func(network, addr string) (net.Conn, error)
+		netDialContext    func(ctx context.Context, network, addr string) (net.Conn, error)
+		netDialTLSContext func(ctx context.Context, network, addr string) (net.Conn, error)
+		tlsClientConfig   *tls.Config
+	}{
+
+		{
+			name:   "HTTP server, all NetDial* defined, shall use NetDialContext",
+			server: server,
+			netDial: func(network, addr string) (net.Conn, error) {
+				return nil, errors.New("NetDial should not be called")
+			},
+			netDialContext: func(_ context.Context, network, addr string) (net.Conn, error) {
+				return net.Dial(network, addr)
+			},
+			netDialTLSContext: func(_ context.Context, network, addr string) (net.Conn, error) {
+				return nil, errors.New("NetDialTLSContext should not be called")
+			},
+			tlsClientConfig: nil,
+		},
+		{
+			name:              "HTTP server, all NetDial* undefined",
+			server:            server,
+			netDial:           nil,
+			netDialContext:    nil,
+			netDialTLSContext: nil,
+			tlsClientConfig:   nil,
+		},
+		{
+			name:   "HTTP server, NetDialContext undefined, shall fallback to NetDial",
+			server: server,
+			netDial: func(network, addr string) (net.Conn, error) {
+				return net.Dial(network, addr)
+			},
+			netDialContext: nil,
+			netDialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return nil, errors.New("NetDialTLSContext should not be called")
+			},
+			tlsClientConfig: nil,
+		},
+		{
+			name:   "HTTPS server, all NetDial* defined, shall use NetDialTLSContext",
+			server: tlsServer,
+			netDial: func(network, addr string) (net.Conn, error) {
+				return nil, errors.New("NetDial should not be called")
+			},
+			netDialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return nil, errors.New("NetDialContext should not be called")
+			},
+			netDialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				netConn, err := net.Dial(network, addr)
+				if err != nil {
+					return nil, err
+				}
+				tlsConn := tls.Client(netConn, tlsConfig)
+				err = tlsConn.Handshake()
+				if err != nil {
+					return nil, err
+				}
+				return tlsConn, nil
+			},
+			tlsClientConfig: nil,
+		},
+		{
+			name:   "HTTPS server, NetDialTLSContext undefined, shall fallback to NetDialContext and do handshake",
+			server: tlsServer,
+			netDial: func(network, addr string) (net.Conn, error) {
+				return nil, errors.New("NetDial should not be called")
+			},
+			netDialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return net.Dial(network, addr)
+			},
+			netDialTLSContext: nil,
+			tlsClientConfig:   tlsConfig,
+		},
+		{
+			name:   "HTTPS server, NetDialTLSContext and NetDialContext undefined, shall fallback to NetDial and do handshake",
+			server: tlsServer,
+			netDial: func(network, addr string) (net.Conn, error) {
+				return net.Dial(network, addr)
+			},
+			netDialContext:    nil,
+			netDialTLSContext: nil,
+			tlsClientConfig:   tlsConfig,
+		},
+		{
+			name:              "HTTPS server, all NetDial* undefined",
+			server:            tlsServer,
+			netDial:           nil,
+			netDialContext:    nil,
+			netDialTLSContext: nil,
+			tlsClientConfig:   tlsConfig,
+		},
+		{
+			name:   "HTTPS server, all NetDialTLSContext defined, dummy TlsClientConfig defined, shall not do handshake",
+			server: tlsServer,
+			netDial: func(network, addr string) (net.Conn, error) {
+				return nil, errors.New("NetDial should not be called")
+			},
+			netDialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return nil, errors.New("NetDialContext should not be called")
+			},
+			netDialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				netConn, err := net.Dial(network, addr)
+				if err != nil {
+					return nil, err
+				}
+				tlsConn := tls.Client(netConn, tlsConfig)
+				err = tlsConn.Handshake()
+				if err != nil {
+					return nil, err
+				}
+				return tlsConn, nil
+			},
+			tlsClientConfig: &tls.Config{
+				RootCAs:            nil,
+				ServerName:         "badserver.com",
+				InsecureSkipVerify: false,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		dialer := Dialer{
+			NetDial:           tc.netDial,
+			NetDialContext:    tc.netDialContext,
+			NetDialTLSContext: tc.netDialTLSContext,
+			TLSClientConfig:   tc.tlsClientConfig,
+		}
+
+		// Test websocket dial
+		c, _, err := dialer.Dial(testUrls[tc.server], nil)
+		if err != nil {
+			t.Errorf("FAILED %s, err: %s", tc.name, err.Error())
+		} else {
+			c.Close()
+		}
+	}
+}
+func TestNextProtos(t *testing.T) {
+	t.Parallel()
+	ts := httptest.NewUnstartedServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+	)
+	ts.EnableHTTP2 = true
+	ts.StartTLS()
+	defer ts.Close()
+
+	d := Dialer{
+		TLSClientConfig: ts.Client().Transport.(*http.Transport).TLSClientConfig,
+	}
+
+	r, err := ts.Client().Get(ts.URL)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	r.Body.Close()
+
+	// Asserts that Dialer.TLSClientConfig.NextProtos contains "h2"
+	// after the Client.Get call from net/http above.
+	var containsHTTP2 bool = false
+	for _, proto := range d.TLSClientConfig.NextProtos {
+		if proto == "h2" {
+			containsHTTP2 = true
+		}
+	}
+	if !containsHTTP2 {
+		t.Fatalf("Dialer.TLSClientConfig.NextProtos does not contain \"h2\"")
+	}
+
+	_, _, err = d.Dial(makeWsProto(ts.URL), nil)
+	if err == nil {
+		t.Fatalf("Dial succeeded, expect fail ")
+	}
 }

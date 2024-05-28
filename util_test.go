@@ -21,6 +21,7 @@ var equalASCIIFoldTests = []struct {
 }
 
 func TestEqualASCIIFold(t *testing.T) {
+	t.Parallel()
 	for _, tt := range equalASCIIFoldTests {
 		eq := equalASCIIFold(tt.s, tt.t)
 		if eq != tt.eq {
@@ -44,11 +45,32 @@ var tokenListContainsValueTests = []struct {
 }
 
 func TestTokenListContainsValue(t *testing.T) {
+	t.Parallel()
 	for _, tt := range tokenListContainsValueTests {
 		h := http.Header{"Upgrade": {tt.value}}
 		ok := tokenListContainsValue(h, "Upgrade", "websocket")
 		if ok != tt.ok {
 			t.Errorf("tokenListContainsValue(h, n, %q) = %v, want %v", tt.value, ok, tt.ok)
+		}
+	}
+}
+
+var isValidChallengeKeyTests = []struct {
+	key string
+	ok  bool
+}{
+	{"dGhlIHNhbXBsZSBub25jZQ==", true},
+	{"", false},
+	{"InvalidKey", false},
+	{"WHQ4eXhscUtKYjBvOGN3WEdtOEQ=", false},
+}
+
+func TestIsValidChallengeKey(t *testing.T) {
+	t.Parallel()
+	for _, tt := range isValidChallengeKeyTests {
+		ok := isValidChallengeKey(tt.key)
+		if ok != tt.ok {
+			t.Errorf("isValidChallengeKey returns %v, want %v", ok, tt.ok)
 		}
 	}
 }
@@ -86,6 +108,7 @@ var parseExtensionTests = []struct {
 }
 
 func TestParseExtensions(t *testing.T) {
+	t.Parallel()
 	for _, tt := range parseExtensionTests {
 		h := http.Header{http.CanonicalHeaderKey("Sec-WebSocket-Extensions"): {tt.value}}
 		extensions := parseExtensions(h)

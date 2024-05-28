@@ -84,7 +84,7 @@ func echoCopyFull(w http.ResponseWriter, r *http.Request) {
 }
 
 // echoReadAll echoes messages from the client by reading the entire message
-// with ioutil.ReadAll.
+// with io.ReadAll.
 func echoReadAll(w http.ResponseWriter, r *http.Request, writeMessage, writePrepared bool) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -160,7 +160,7 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Not found.", http.StatusNotFound)
 		return
 	}
-	if r.Method != "GET" {
+	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}

@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build ignore
 // +build ignore
 
 package main
@@ -32,7 +33,8 @@ func echo(w http.ResponseWriter, r *http.Request) {
 			log.Println("read:", err)
 			break
 		}
-		log.Printf("recv: %s", message)
+
+		log.Printf("recv: %s, type: %s", message, websocket.FormatMessageType(mt))
 		err = c.WriteMessage(mt, message)
 		if err != nil {
 			log.Println("write:", err)
@@ -69,6 +71,7 @@ window.addEventListener("load", function(evt) {
         var d = document.createElement("div");
         d.textContent = message;
         output.appendChild(d);
+        output.scroll(0, output.scrollHeight);
     };
 
     document.getElementById("open").onclick = function(evt) {
@@ -126,7 +129,7 @@ You can change the message and send multiple times.
 <button id="send">Send</button>
 </form>
 </td><td valign="top" width="50%">
-<div id="output"></div>
+<div id="output" style="max-height: 70vh;overflow-y: scroll;"></div>
 </td></tr></table>
 </body>
 </html>

@@ -7,10 +7,10 @@ package main
 import (
 	"flag"
 	"html/template"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -49,7 +49,7 @@ func readFileIfModified(lastMod time.Time) ([]byte, time.Time, error) {
 	if !fi.ModTime().After(lastMod) {
 		return nil, lastMod, nil
 	}
-	p, err := ioutil.ReadFile(filename)
+	p, err := os.ReadFile(filepath.Clean(filename))
 	if err != nil {
 		return nil, fi.ModTime(), err
 	}
@@ -133,7 +133,7 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
-	if r.Method != "GET" {
+	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}

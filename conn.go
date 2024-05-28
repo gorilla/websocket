@@ -6,13 +6,13 @@ package websocket
 
 import (
 	"bufio"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"io"
-	"io/ioutil"
-	"math/rand"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -180,16 +180,16 @@ var (
 	errInvalidControlFrame = errors.New("websocket: invalid control frame")
 )
 
-func newMaskKey() [4]byte {
-	n := rand.Uint32()
-	return [4]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)}
-}
+// maskRand is an io.Reader for generating mask bytes. The reader is initialized
+// to crypto/rand Reader. Tests swap the reader to a math/rand reader for
+// reproducible results.
+var maskRand = rand.Reader
 
-func hideTempErr(err error) error {
-	if e, ok := err.(net.Error); ok && e.Temporary() {
-		err = &netError{msg: e.Error(), timeout: e.Timeout()}
-	}
-	return err
+// newMaskKey returns a new 32 bit value for masking client frames.
+func newMaskKey() [4]byte {
+	var k [4]byte
+	_, _ = io.ReadFull(maskRand, k[:])
+	return k
 }
 
 func isControl(frameType int) bool {
@@ -357,7 +357,6 @@ func (c *Conn) RemoteAddr() net.Addr {
 // Write methods
 
 func (c *Conn) writeFatal(err error) error {
-	err = hideTempErr(err)
 	c.writeErrMu.Lock()
 	if c.writeErr == nil {
 		c.writeErr = err
@@ -401,6 +400,12 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 	return nil
 }
 
+func (c *Conn) writeBufs(bufs ...[]byte) error {
+	b := net.Buffers(bufs)
+	_, err := b.WriteTo(c.conn)
+	return err
+}
+
 // WriteControl writes a control message with the given deadline. The allowed
 // message types are CloseMessage, PingMessage and PongMessage.
 func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) error {
@@ -429,21 +434,27 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 		maskBytes(key, 0, buf[6:])
 	}
 
-	d := 1000 * time.Hour
-	if !deadline.IsZero() {
-		d = deadline.Sub(time.Now())
+	if deadline.IsZero() {
+		// No timeout for zero time.
+		<-c.mu
+	} else {
+		d := time.Until(deadline)
 		if d < 0 {
 			return errWriteTimeout
 		}
+		select {
+		case <-c.mu:
+		default:
+			timer := time.NewTimer(d)
+			select {
+			case <-c.mu:
+				timer.Stop()
+			case <-timer.C:
+				return errWriteTimeout
+			}
+		}
 	}
 
-	timer := time.NewTimer(d)
-	select {
-	case <-c.mu:
-		timer.Stop()
-	case <-timer.C:
-		return errWriteTimeout
-	}
 	defer func() { c.mu <- struct{}{} }()
 
 	c.writeErrMu.Lock()
@@ -788,53 +799,75 @@ func (c *Conn) advanceFrame() (int, error) {
 	// 1. Skip remainder of previous frame.
 
 	if c.readRemaining > 0 {
-		if _, err := io.CopyN(ioutil.Discard, c.br, c.readRemaining); err != nil {
+		if _, err := io.CopyN(io.Discard, c.br, c.readRemaining); err != nil {
 			return noFrame, err
 		}
 	}
 
 	// 2. Read and parse first two bytes of frame header.
+	// To aid debugging, collect and report all errors in the first two bytes
+	// of the header.
+
+	var errors []string
 
 	p, err := c.read(2)
 	if err != nil {
 		return noFrame, err
 	}
 
-	final := p[0]&finalBit != 0
 	frameType := int(p[0] & 0xf)
+	final := p[0]&finalBit != 0
+	rsv1 := p[0]&rsv1Bit != 0
+	rsv2 := p[0]&rsv2Bit != 0
+	rsv3 := p[0]&rsv3Bit != 0
 	mask := p[1]&maskBit != 0
 	c.setReadRemaining(int64(p[1] & 0x7f))
 
 	c.readDecompress = false
-	if c.newDecompressionReader != nil && (p[0]&rsv1Bit) != 0 {
-		c.readDecompress = true
-		p[0] &^= rsv1Bit
+	if rsv1 {
+		if c.newDecompressionReader != nil {
+			c.readDecompress = true
+		} else {
+			errors = append(errors, "RSV1 set")
+		}
 	}
 
-	if rsv := p[0] & (rsv1Bit | rsv2Bit | rsv3Bit); rsv != 0 {
-		return noFrame, c.handleProtocolError("unexpected reserved bits 0x" + strconv.FormatInt(int64(rsv), 16))
+	if rsv2 {
+		errors = append(errors, "RSV2 set")
+	}
+
+	if rsv3 {
+		errors = append(errors, "RSV3 set")
 	}
 
 	switch frameType {
 	case CloseMessage, PingMessage, PongMessage:
 		if c.readRemaining > maxControlFramePayloadSize {
-			return noFrame, c.handleProtocolError("control frame length > 125")
+			errors = append(errors, "len > 125 for control")
 		}
 		if !final {
-			return noFrame, c.handleProtocolError("control frame not final")
+			errors = append(errors, "FIN not set on control")
 		}
 	case TextMessage, BinaryMessage:
 		if !c.readFinal {
-			return noFrame, c.handleProtocolError("message start before final message frame")
+			errors = append(errors, "data before FIN")
 		}
 		c.readFinal = final
 	case continuationFrame:
 		if c.readFinal {
-			return noFrame, c.handleProtocolError("continuation after final message frame")
+			errors = append(errors, "continuation after FIN")
 		}
 		c.readFinal = final
 	default:
-		return noFrame, c.handleProtocolError("unknown opcode " + strconv.Itoa(frameType))
+		errors = append(errors, "bad opcode "+strconv.Itoa(frameType))
+	}
+
+	if mask != c.isServer {
+		errors = append(errors, "bad MASK")
+	}
+
+	if len(errors) > 0 {
+		return noFrame, c.handleProtocolError(strings.Join(errors, ", "))
 	}
 
 	// 3. Read and parse frame length as per
@@ -871,10 +904,6 @@ func (c *Conn) advanceFrame() (int, error) {
 	}
 
 	// 4. Handle frame masking.
-
-	if mask != c.isServer {
-		return noFrame, c.handleProtocolError("incorrect mask flag")
-	}
 
 	if mask {
 		c.readMaskPos = 0
@@ -935,7 +964,7 @@ func (c *Conn) advanceFrame() (int, error) {
 		if len(payload) >= 2 {
 			closeCode = int(binary.BigEndian.Uint16(payload))
 			if !isValidReceivedCloseCode(closeCode) {
-				return noFrame, c.handleProtocolError("invalid close code")
+				return noFrame, c.handleProtocolError("bad close code " + strconv.Itoa(closeCode))
 			}
 			closeText = string(payload[2:])
 			if !utf8.ValidString(closeText) {
@@ -952,7 +981,11 @@ func (c *Conn) advanceFrame() (int, error) {
 }
 
 func (c *Conn) handleProtocolError(message string) error {
-	c.WriteControl(CloseMessage, FormatCloseMessage(CloseProtocolError, message), time.Now().Add(writeWait))
+	data := FormatCloseMessage(CloseProtocolError, message)
+	if len(data) > maxControlFramePayloadSize {
+		data = data[:maxControlFramePayloadSize]
+	}
+	c.WriteControl(CloseMessage, data, time.Now().Add(writeWait))
 	return errors.New("websocket: " + message)
 }
 
@@ -979,7 +1012,7 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 	for c.readErr == nil {
 		frameType, err := c.advanceFrame()
 		if err != nil {
-			c.readErr = hideTempErr(err)
+			c.readErr = err
 			break
 		}
 
@@ -1019,7 +1052,7 @@ func (r *messageReader) Read(b []byte) (int, error) {
 				b = b[:c.readRemaining]
 			}
 			n, err := c.br.Read(b)
-			c.readErr = hideTempErr(err)
+			c.readErr = err
 			if c.isServer {
 				c.readMaskPos = maskBytes(c.readMaskKey, c.readMaskPos, b[:n])
 			}
@@ -1040,7 +1073,7 @@ func (r *messageReader) Read(b []byte) (int, error) {
 		frameType, err := c.advanceFrame()
 		switch {
 		case err != nil:
-			c.readErr = hideTempErr(err)
+			c.readErr = err
 		case frameType == TextMessage || frameType == BinaryMessage:
 			c.readErr = errors.New("websocket: internal error, unexpected text or binary in Reader")
 		}
@@ -1065,7 +1098,7 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 	if err != nil {
 		return messageType, nil, err
 	}
-	p, err = ioutil.ReadAll(r)
+	p, err = io.ReadAll(r)
 	return messageType, p, err
 }
 
@@ -1132,7 +1165,7 @@ func (c *Conn) SetPingHandler(h func(appData string) error) {
 			err := c.WriteControl(PongMessage, []byte(message), time.Now().Add(writeWait))
 			if err == ErrCloseSent {
 				return nil
-			} else if e, ok := err.(net.Error); ok && e.Temporary() {
+			} else if _, ok := err.(net.Error); ok {
 				return nil
 			}
 			return err
@@ -1160,8 +1193,16 @@ func (c *Conn) SetPongHandler(h func(appData string) error) {
 	c.handlePong = h
 }
 
+// NetConn returns the underlying connection that is wrapped by c.
+// Note that writing to or reading from this connection directly will corrupt the
+// WebSocket connection.
+func (c *Conn) NetConn() net.Conn {
+	return c.conn
+}
+
 // UnderlyingConn returns the internal net.Conn. This can be used to further
 // modifications to connection specific flags.
+// Deprecated: Use the NetConn method.
 func (c *Conn) UnderlyingConn() net.Conn {
 	return c.conn
 }
@@ -1198,4 +1239,16 @@ func FormatCloseMessage(closeCode int, text string) []byte {
 	binary.BigEndian.PutUint16(buf, uint16(closeCode))
 	copy(buf[2:], text)
 	return buf
+}
+
+var messageTypes = map[int]string{
+	TextMessage:   "TextMessage",
+	BinaryMessage: "BinaryMessage",
+	CloseMessage:  "CloseMessage",
+	PingMessage:   "PingMessage",
+	PongMessage:   "PongMessage",
+}
+
+func FormatMessageType(mt int) string {
+	return messageTypes[mt]
 }
