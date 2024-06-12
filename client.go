@@ -409,3 +409,15 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 	}
 	return cfg.Clone()
 }
+
+func doHandshake(ctx context.Context, tlsConn *tls.Conn, cfg *tls.Config) error {
+	if err := tlsConn.HandshakeContext(ctx); err != nil {
+		return err
+	}
+	if !cfg.InsecureSkipVerify {
+		if err := tlsConn.VerifyHostname(cfg.ServerName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
