@@ -174,7 +174,8 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 
 	netConn, brw, err := http.NewResponseController(w).Hijack()
 	if err != nil {
-		return u.returnError(w, r, http.StatusInternalServerError, err.Error())
+		return u.returnError(w, r, http.StatusInternalServerError,
+			"websocket: hijack: "+err.Error())
 	}
 
 	if brw.Reader.Buffered() > 0 {
