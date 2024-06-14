@@ -7,34 +7,51 @@ package websocket
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"golang.org/x/net/proxy"
 )
 
-type netDialerFunc func(network, addr string) (net.Conn, error)
+type netDialerFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
 func (fn netDialerFunc) Dial(network, addr string) (net.Conn, error) {
-	return fn(network, addr)
+	return fn(context.Background(), network, addr)
 }
 
-func init() {
-	proxy_RegisterDialerType("http", func(proxyURL *url.URL, forwardDialer proxy_Dialer) (proxy_Dialer, error) {
-		return &httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDialer.Dial}, nil
-	})
+func (fn netDialerFunc) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	return fn(ctx, network, addr)
+}
+
+func proxyFromURL(proxyURL *url.URL, forwardDial netDialerFunc) (netDialerFunc, error) {
+	if proxyURL.Scheme == "http" {
+		return (&httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDial}).DialContext, nil
+	}
+	dialer, err := proxy.FromURL(proxyURL, forwardDial)
+	if err != nil {
+		return nil, err
+	}
+	if d, ok := dialer.(proxy.ContextDialer); ok {
+		return d.DialContext, nil
+	}
+	return func(ctx context.Context, net, addr string) (net.Conn, error) {
+		return dialer.Dial(net, addr)
+	}, nil
 }
 
 type httpProxyDialer struct {
 	proxyURL    *url.URL
-	forwardDial func(network, addr string) (net.Conn, error)
+	forwardDial netDialerFunc
 }
 
-func (hpd *httpProxyDialer) Dial(network string, addr string) (net.Conn, error) {
+func (hpd *httpProxyDialer) DialContext(ctx context.Context, network string, addr string) (net.Conn, error) {
 	hostPort, _ := hostPortNoPort(hpd.proxyURL)
-	conn, err := hpd.forwardDial(network, hostPort)
+	conn, err := hpd.forwardDial(ctx, network, hostPort)
 	if err != nil {
 		return nil, err
 	}
