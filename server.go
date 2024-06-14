@@ -33,7 +33,6 @@ type Upgrader struct {
 	// size is zero, then buffers allocated by the HTTP server are used. The
 	// I/O buffer sizes do not limit the size of the messages that can be sent
 	// or received.
-	// The default value is 4096 bytes, 4kb.
 	ReadBufferSize, WriteBufferSize int
 
 	// WriteBufferPool is a pool of buffers for write operations. If the value
@@ -102,8 +101,8 @@ func checkSameOrigin(r *http.Request) bool {
 func (u *Upgrader) selectSubprotocol(r *http.Request, responseHeader http.Header) string {
 	if u.Subprotocols != nil {
 		clientProtocols := Subprotocols(r)
-		for _, clientProtocol := range clientProtocols {
-			for _, serverProtocol := range u.Subprotocols {
+		for _, serverProtocol := range u.Subprotocols {
+			for _, clientProtocol := range clientProtocols {
 				if clientProtocol == serverProtocol {
 					return clientProtocol
 				}
@@ -173,7 +172,12 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		}
 	}
 
-	netConn, brw, err := http.NewResponseController(w).Hijack()
+	h, ok := w.(http.Hijacker)
+	if !ok {
+		return u.returnError(w, r, http.StatusInternalServerError, "websocket: response does not implement http.Hijacker")
+	}
+	var brw *bufio.ReadWriter
+	netConn, brw, err := h.Hijack()
 	if err != nil {
 		return u.returnError(w, r, http.StatusInternalServerError, err.Error())
 	}

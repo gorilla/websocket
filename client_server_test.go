@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -148,7 +149,6 @@ func sendRecv(t *testing.T, ws *Conn) {
 }
 
 func TestProxyDial(t *testing.T) {
-	t.Parallel()
 
 	s := newServer(t)
 	defer s.Close()
@@ -187,7 +187,6 @@ func TestProxyDial(t *testing.T) {
 }
 
 func TestProxyAuthorizationDial(t *testing.T) {
-	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -228,7 +227,6 @@ func TestProxyAuthorizationDial(t *testing.T) {
 }
 
 func TestDial(t *testing.T) {
-	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -241,7 +239,6 @@ func TestDial(t *testing.T) {
 }
 
 func TestDialCookieJar(t *testing.T) {
-	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -304,7 +301,6 @@ func rootCAs(t *testing.T, s *httptest.Server) *x509.CertPool {
 }
 
 func TestDialTLS(t *testing.T) {
-	t.Parallel()
 	s := newTLSServer(t)
 	defer s.Close()
 
@@ -319,7 +315,6 @@ func TestDialTLS(t *testing.T) {
 }
 
 func TestDialTimeout(t *testing.T) {
-	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -376,7 +371,6 @@ func (c *requireDeadlineNetConn) LocalAddr() net.Addr  { return c.c.LocalAddr() 
 func (c *requireDeadlineNetConn) RemoteAddr() net.Addr { return c.c.RemoteAddr() }
 
 func TestHandshakeTimeout(t *testing.T) {
-	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -393,7 +387,6 @@ func TestHandshakeTimeout(t *testing.T) {
 }
 
 func TestHandshakeTimeoutInContext(t *testing.T) {
-	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -415,7 +408,6 @@ func TestHandshakeTimeoutInContext(t *testing.T) {
 }
 
 func TestDialBadScheme(t *testing.T) {
-	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -427,7 +419,6 @@ func TestDialBadScheme(t *testing.T) {
 }
 
 func TestDialBadOrigin(t *testing.T) {
-	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -445,7 +436,6 @@ func TestDialBadOrigin(t *testing.T) {
 }
 
 func TestDialBadHeader(t *testing.T) {
-	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -465,7 +455,6 @@ func TestDialBadHeader(t *testing.T) {
 }
 
 func TestBadMethod(t *testing.T) {
-	t.Parallel()
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ws, err := cstUpgrader.Upgrade(w, r, nil)
 		if err == nil {
@@ -494,7 +483,6 @@ func TestBadMethod(t *testing.T) {
 }
 
 func TestDialExtraTokensInRespHeaders(t *testing.T) {
-	t.Parallel()
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		challengeKey := r.Header.Get("Sec-Websocket-Key")
 		w.Header().Set("Upgrade", "foo, websocket")
@@ -512,7 +500,6 @@ func TestDialExtraTokensInRespHeaders(t *testing.T) {
 }
 
 func TestHandshake(t *testing.T) {
-	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -539,7 +526,6 @@ func TestHandshake(t *testing.T) {
 }
 
 func TestRespOnBadHandshake(t *testing.T) {
-	t.Parallel()
 	const expectedStatus = http.StatusGone
 	const expectedBody = "This is the response body."
 
@@ -563,7 +549,7 @@ func TestRespOnBadHandshake(t *testing.T) {
 		t.Errorf("resp.StatusCode=%d, want %d", resp.StatusCode, expectedStatus)
 	}
 
-	p, err := io.ReadAll(resp.Body)
+	p, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("ReadFull(resp.Body) returned error %v", err)
 	}
@@ -584,7 +570,6 @@ func (w testLogWriter) Write(p []byte) (int, error) {
 
 // TestHost tests handling of host names and confirms that it matches net/http.
 func TestHost(t *testing.T) {
-	t.Parallel()
 
 	upgrader := Upgrader{}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -766,7 +751,6 @@ func TestHost(t *testing.T) {
 }
 
 func TestDialCompression(t *testing.T) {
-	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -781,7 +765,6 @@ func TestDialCompression(t *testing.T) {
 }
 
 func TestSocksProxyDial(t *testing.T) {
-	t.Parallel()
 	s := newServer(t)
 	defer s.Close()
 
@@ -861,7 +844,6 @@ func TestSocksProxyDial(t *testing.T) {
 }
 
 func TestTracingDialWithContext(t *testing.T) {
-	t.Parallel()
 
 	var headersWrote, requestWrote, getConn, gotConn, connectDone, gotFirstResponseByte bool
 	trace := &httptrace.ClientTrace{
@@ -921,7 +903,6 @@ func TestTracingDialWithContext(t *testing.T) {
 }
 
 func TestEmptyTracingDialWithContext(t *testing.T) {
-	t.Parallel()
 
 	trace := &httptrace.ClientTrace{}
 	ctx := httptrace.WithClientTrace(context.Background(), trace)
@@ -943,7 +924,6 @@ func TestEmptyTracingDialWithContext(t *testing.T) {
 
 // TestNetDialConnect tests selection of dial method between NetDial, NetDialContext, NetDialTLS or NetDialTLSContext
 func TestNetDialConnect(t *testing.T) {
-	t.Parallel()
 
 	upgrader := Upgrader{}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1119,7 +1099,6 @@ func TestNetDialConnect(t *testing.T) {
 	}
 }
 func TestNextProtos(t *testing.T) {
-	t.Parallel()
 	ts := httptest.NewUnstartedServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
 	)

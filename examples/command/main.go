@@ -57,6 +57,8 @@ func pumpStdin(ws *websocket.Conn, w io.Writer) {
 }
 
 func pumpStdout(ws *websocket.Conn, r io.Reader, done chan struct{}) {
+	defer func() {
+	}()
 	s := bufio.NewScanner(r)
 	for s.Scan() {
 		ws.SetWriteDeadline(time.Now().Add(writeWait))

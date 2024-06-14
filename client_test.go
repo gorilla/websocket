@@ -20,7 +20,6 @@ var hostPortNoPortTests = []struct {
 }
 
 func TestHostPortNoPort(t *testing.T) {
-	t.Parallel()
 	for _, tt := range hostPortNoPortTests {
 		hostPort, hostNoPort := hostPortNoPort(tt.u)
 		if hostPort != tt.hostPort {

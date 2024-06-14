@@ -12,7 +12,6 @@ import (
 )
 
 func TestJoinMessages(t *testing.T) {
-	t.Parallel()
 	messages := []string{"a", "bc", "def", "ghij", "klmno", "0", "12", "345", "6789"}
 	for _, readChunk := range []int{1, 2, 3, 4, 5, 6, 7} {
 		for _, term := range []string{"", ","} {
