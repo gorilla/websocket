@@ -372,7 +372,9 @@ func (c *Conn) read(n int) ([]byte, error) {
 	if err == io.EOF {
 		err = errUnexpectedEOF
 	}
-	c.br.Discard(len(p))
+	// Discard is guaranteed to succeed because the number of bytes to discard
+	// is less than or equal to the number of bytes buffered.
+	_, _ = c.br.Discard(len(p))
 	return p, err
 }
 
@@ -387,7 +389,9 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 		return err
 	}
 
-	c.conn.SetWriteDeadline(deadline)
+	if err := c.conn.SetWriteDeadline(deadline); err != nil {
+		return c.writeFatal(err)
+	}
 	if len(buf1) == 0 {
 		_, err = c.conn.Write(buf0)
 	} else {
@@ -397,7 +401,7 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 		return c.writeFatal(err)
 	}
 	if frameType == CloseMessage {
-		c.writeFatal(ErrCloseSent)
+		_ = c.writeFatal(ErrCloseSent)
 	}
 	return nil
 }
@@ -460,13 +464,14 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 		return err
 	}
 
-	c.conn.SetWriteDeadline(deadline)
-	_, err = c.conn.Write(buf)
-	if err != nil {
+	if err := c.conn.SetWriteDeadline(deadline); err != nil {
+		return c.writeFatal(err)
+	}
+	if _, err = c.conn.Write(buf); err != nil {
 		return c.writeFatal(err)
 	}
 	if messageType == CloseMessage {
-		c.writeFatal(ErrCloseSent)
+		_ = c.writeFatal(ErrCloseSent)
 	}
 	return err
 }
@@ -630,7 +635,7 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 	}
 
 	if final {
-		w.endMessage(errWriteClosed)
+		_ = w.endMessage(errWriteClosed)
 		return nil
 	}
 
@@ -817,7 +822,7 @@ func (c *Conn) advanceFrame() (int, error) {
 	rsv2 := p[0]&rsv2Bit != 0
 	rsv3 := p[0]&rsv3Bit != 0
 	mask := p[1]&maskBit != 0
-	c.setReadRemaining(int64(p[1] & 0x7f))
+	_ = c.setReadRemaining(int64(p[1] & 0x7f)) // will not fail because argument is >= 0
 
 	c.readDecompress = false
 	if rsv1 {
@@ -922,7 +927,8 @@ func (c *Conn) advanceFrame() (int, error) {
 		}
 
 		if c.readLimit > 0 && c.readLength > c.readLimit {
-			c.WriteControl(CloseMessage, FormatCloseMessage(CloseMessageTooBig, ""), time.Now().Add(writeWait))
+			// Make a best effort to send a close message describing the problem.
+			_ = c.WriteControl(CloseMessage, FormatCloseMessage(CloseMessageTooBig, ""), time.Now().Add(writeWait))
 			return noFrame, ErrReadLimit
 		}
 
@@ -934,7 +940,7 @@ func (c *Conn) advanceFrame() (int, error) {
 	var payload []byte
 	if c.readRemaining > 0 {
 		payload, err = c.read(int(c.readRemaining))
-		c.setReadRemaining(0)
+		_ = c.setReadRemaining(0) // will not fail because argument is >= 0
 		if err != nil {
 			return noFrame, err
 		}
@@ -981,7 +987,8 @@ func (c *Conn) handleProtocolError(message string) error {
 	if len(data) > maxControlFramePayloadSize {
 		data = data[:maxControlFramePayloadSize]
 	}
-	c.WriteControl(CloseMessage, data, time.Now().Add(writeWait))
+	// Make a best effor to send a close message describing the problem.
+	_ = c.WriteControl(CloseMessage, data, time.Now().Add(writeWait))
 	return errors.New("websocket: " + message)
 }
 
@@ -1054,7 +1061,7 @@ func (r *messageReader) Read(b []byte) (int, error) {
 			}
 			rem := c.readRemaining
 			rem -= int64(n)
-			c.setReadRemaining(rem)
+			_ = c.setReadRemaining(rem) // rem is guaranteed to be >= 0
 			if c.readRemaining > 0 && c.readErr == io.EOF {
 				c.readErr = errUnexpectedEOF
 			}
@@ -1136,7 +1143,8 @@ func (c *Conn) SetCloseHandler(h func(code int, text string) error) {
 	if h == nil {
 		h = func(code int, text string) error {
 			message := FormatCloseMessage(code, "")
-			c.WriteControl(CloseMessage, message, time.Now().Add(writeWait))
+			// Make a best effor to send the close message.
+			_ = c.WriteControl(CloseMessage, message, time.Now().Add(writeWait))
 			return nil
 		}
 	}

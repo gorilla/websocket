@@ -158,7 +158,7 @@ func TestControl(t *testing.T) {
 			wc := newTestConn(nil, &connBuf, isServer)
 			rc := newTestConn(&connBuf, nil, !isServer)
 			if isWriteControl {
-				wc.WriteControl(PongMessage, []byte(message), time.Now().Add(time.Second))
+				_ = wc.WriteControl(PongMessage, []byte(message), time.Now().Add(time.Second))
 			} else {
 				w, err := wc.NextWriter(PongMessage)
 				if err != nil {
@@ -175,7 +175,7 @@ func TestControl(t *testing.T) {
 				}
 				var actualMessage string
 				rc.SetPongHandler(func(s string) error { actualMessage = s; return nil })
-				rc.NextReader()
+				_, _, _ = rc.NextReader()
 				if actualMessage != message {
 					t.Errorf("%s: pong=%q, want %q", name, actualMessage, message)
 					continue
@@ -359,8 +359,8 @@ func TestCloseFrameBeforeFinalMessageFrame(t *testing.T) {
 	rc := newTestConn(&b1, &b2, true)
 
 	w, _ := wc.NextWriter(BinaryMessage)
-	w.Write(make([]byte, bufSize+bufSize/2))
-	wc.WriteControl(CloseMessage, FormatCloseMessage(expectedErr.Code, expectedErr.Text), time.Now().Add(10*time.Second))
+	_, _ = w.Write(make([]byte, bufSize+bufSize/2))
+	_ = wc.WriteControl(CloseMessage, FormatCloseMessage(expectedErr.Code, expectedErr.Text), time.Now().Add(10*time.Second))
 	w.Close()
 
 	op, r, err := rc.NextReader()
@@ -386,7 +386,7 @@ func TestEOFWithinFrame(t *testing.T) {
 		rc := newTestConn(&b, nil, true)
 
 		w, _ := wc.NextWriter(BinaryMessage)
-		w.Write(make([]byte, bufSize))
+		_, _ = w.Write(make([]byte, bufSize))
 		w.Close()
 
 		if n >= b.Len() {
@@ -420,7 +420,7 @@ func TestEOFBeforeFinalFrame(t *testing.T) {
 	rc := newTestConn(&b1, &b2, true)
 
 	w, _ := wc.NextWriter(BinaryMessage)
-	w.Write(make([]byte, bufSize+bufSize/2))
+	_, _ = w.Write(make([]byte, bufSize+bufSize/2))
 
 	op, r, err := rc.NextReader()
 	if op != BinaryMessage || err != nil {
@@ -439,7 +439,7 @@ func TestEOFBeforeFinalFrame(t *testing.T) {
 func TestWriteAfterMessageWriterClose(t *testing.T) {
 	wc := newTestConn(nil, &bytes.Buffer{}, false)
 	w, _ := wc.NextWriter(BinaryMessage)
-	io.WriteString(w, "hello")
+	_, _ = io.WriteString(w, "hello")
 	if err := w.Close(); err != nil {
 		t.Fatalf("unxpected error closing message writer, %v", err)
 	}
@@ -449,7 +449,7 @@ func TestWriteAfterMessageWriterClose(t *testing.T) {
 	}
 
 	w, _ = wc.NextWriter(BinaryMessage)
-	io.WriteString(w, "hello")
+	_, _ = io.WriteString(w, "hello")
 
 	// close w by getting next writer
 	_, err := wc.NextWriter(BinaryMessage)
@@ -474,13 +474,13 @@ func TestReadLimit(t *testing.T) {
 
 		// Send message at the limit with interleaved pong.
 		w, _ := wc.NextWriter(BinaryMessage)
-		w.Write(message[:readLimit-1])
-		wc.WriteControl(PongMessage, []byte("this is a pong"), time.Now().Add(10*time.Second))
-		w.Write(message[:1])
+		_, _ = w.Write(message[:readLimit-1])
+		_ = wc.WriteControl(PongMessage, []byte("this is a pong"), time.Now().Add(10*time.Second))
+		_, _ = w.Write(message[:1])
 		w.Close()
 
 		// Send message larger than the limit.
-		wc.WriteMessage(BinaryMessage, message[:readLimit+1])
+		_ = wc.WriteMessage(BinaryMessage, message[:readLimit+1])
 
 		op, _, err := rc.NextReader()
 		if op != BinaryMessage || err != nil {
@@ -593,7 +593,7 @@ func TestBufioReadBytes(t *testing.T) {
 	rc := newConn(fakeNetConn{Reader: &b1, Writer: &b2}, true, len(m)-64, len(m)-64, nil, nil, nil)
 
 	w, _ := wc.NextWriter(BinaryMessage)
-	w.Write(m)
+	_, _ = w.Write(m)
 	w.Close()
 
 	op, r, err := rc.NextReader()
@@ -667,7 +667,7 @@ func TestConcurrentWritePanic(t *testing.T) {
 	w := blockingWriter{make(chan struct{}), make(chan struct{})}
 	c := newTestConn(nil, w, false)
 	go func() {
-		c.WriteMessage(TextMessage, []byte{})
+		_ = c.WriteMessage(TextMessage, []byte{})
 	}()
 
 	// wait for goroutine to block in write.
@@ -680,7 +680,7 @@ func TestConcurrentWritePanic(t *testing.T) {
 		}
 	}()
 
-	c.WriteMessage(TextMessage, []byte{})
+	_ = c.WriteMessage(TextMessage, []byte{})
 	t.Fatal("should not get here")
 }
 
@@ -700,7 +700,7 @@ func TestFailedConnectionReadPanic(t *testing.T) {
 	}()
 
 	for i := 0; i < 20000; i++ {
-		c.ReadMessage()
+		_, _, _ = c.ReadMessage()
 	}
 	t.Fatal("should not get here")
 }
