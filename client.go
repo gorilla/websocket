@@ -303,7 +303,9 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 			return nil, nil, err
 		}
 		if proxyURL != nil {
-			dialer, err := proxy_FromURL(proxyURL, netDialerFunc(netDial))
+			proxyDialer := &netDialerFunc{fn: netDial}
+			modifyProxyDialer(ctx, d, proxyURL, proxyDialer)
+			dialer, err := proxy_FromURL(proxyURL, proxyDialer)
 			if err != nil {
 				return nil, nil, err
 			}
