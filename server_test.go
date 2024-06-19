@@ -7,8 +7,10 @@ package websocket
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
@@ -145,5 +147,25 @@ func TestBufioReuse(t *testing.T) {
 		if reuse := &c.writeBuf[0] == &writeBuf[0]; reuse != tt.reuse {
 			t.Errorf("%d: write buffer reuse=%v, want %v", i, reuse, tt.reuse)
 		}
+	}
+}
+
+func TestHijack_NotSupported(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Connection", "upgrade")
+	req.Header.Set("Sec-Websocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	req.Header.Set("Sec-Websocket-Version", "13")
+
+	recorder := httptest.NewRecorder()
+
+	upgrader := Upgrader{}
+	_, err := upgrader.Upgrade(recorder, req, nil)
+
+	if want := (HandshakeError{}); !errors.As(err, &want) || recorder.Code != http.StatusInternalServerError {
+		t.Errorf("want %T and status_code=%d", want, http.StatusInternalServerError)
+		t.Fatalf("got err=%T and status_code=%d", err, recorder.Code)
 	}
 }

@@ -172,14 +172,10 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		}
 	}
 
-	h, ok := w.(http.Hijacker)
-	if !ok {
-		return u.returnError(w, r, http.StatusInternalServerError, "websocket: response does not implement http.Hijacker")
-	}
-	var brw *bufio.ReadWriter
-	netConn, brw, err := h.Hijack()
+	netConn, brw, err := http.NewResponseController(w).Hijack()
 	if err != nil {
-		return u.returnError(w, r, http.StatusInternalServerError, err.Error())
+		return u.returnError(w, r, http.StatusInternalServerError,
+			"websocket: hijack: "+err.Error())
 	}
 
 	if brw.Reader.Buffered() > 0 {
