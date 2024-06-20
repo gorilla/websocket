@@ -17,6 +17,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"golang.org/x/net/proxy"
 )
 
 // ErrBadHandshake is returned when the server response to opening handshake is
@@ -281,10 +283,29 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		if err != nil {
 			return nil, nil, err
 		}
-		if proxyURL != nil {
-			netDial, err = proxyFromURL(proxyURL, netDial)
+		switch {
+		case proxyURL == nil:
+			// Do nothing. Not using a proxy.
+		case u.Scheme == "http":
+			if pa := proxyAuth(proxyURL.User); pa != "" {
+				req.Header.Set("Proxy-Authorization", pa)
+			}
+			netDial = func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, network, proxyURL.Host)
+			}
+		case u.Scheme == "https":
+			netDial = (&httpsProxyDialer{proxyURL: proxyURL, forwardDial: netDial}).DialContext
+		default:
+			dialer, err := proxy.FromURL(proxyURL, netDial)
 			if err != nil {
 				return nil, nil, err
+			}
+			if d, ok := dialer.(proxy.ContextDialer); ok {
+				netDial = d.DialContext
+			} else {
+				netDial = func(ctx context.Context, network, addr string) (net.Conn, error) {
+					return dialer.Dial(network, addr)
+				}
 			}
 		}
 	}
