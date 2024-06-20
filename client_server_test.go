@@ -173,24 +173,19 @@ func TestProxyDial(t *testing.T) {
 	cstDialer := cstDialer // make local copy for modification on next line.
 	cstDialer.Proxy = http.ProxyURL(surl)
 
-	connect := false
 	origHandler := s.Server.Config.Handler
 
 	// Capture the request Host header.
 	s.Server.Config.Handler = http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodConnect {
-				connect = true
+				// HTTPS_PROXY comes here.
 				w.WriteHeader(http.StatusOK)
-				return
 			}
 
-			if !connect {
-				t.Log("connect not received")
-				http.Error(w, "connect not received", http.StatusMethodNotAllowed)
-				return
-			}
+			// HTTP_PROXY comes here.
 			origHandler.ServeHTTP(w, r)
+			return
 		})
 
 	ws, _, err := cstDialer.Dial(s.URL, nil)
@@ -211,7 +206,6 @@ func TestProxyAuthorizationDial(t *testing.T) {
 	cstDialer := cstDialer // make local copy for modification on next line.
 	cstDialer.Proxy = http.ProxyURL(surl)
 
-	connect := false
 	origHandler := s.Server.Config.Handler
 
 	// Capture the request Host header.
@@ -219,17 +213,22 @@ func TestProxyAuthorizationDial(t *testing.T) {
 		func(w http.ResponseWriter, r *http.Request) {
 			proxyAuth := r.Header.Get("Proxy-Authorization")
 			expectedProxyAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte("username:password"))
-			if r.Method == http.MethodConnect && proxyAuth == expectedProxyAuth {
-				connect = true
-				w.WriteHeader(http.StatusOK)
+			if proxyAuth != expectedProxyAuth {
+				msg := fmt.Sprintf("expected proxy authorization is %q, but %q is given", expectedProxyAuth, proxyAuth)
+
+				t.Log(msg)
+				http.Error(
+					w,
+					msg,
+					http.StatusProxyAuthRequired,
+				)
 				return
 			}
 
-			if !connect {
-				t.Log("connect with proxy authorization not received")
-				http.Error(w, "connect with proxy authorization not received", http.StatusMethodNotAllowed)
-				return
+			if r.Method == http.MethodConnect {
+				w.WriteHeader(http.StatusOK)
 			}
+
 			origHandler.ServeHTTP(w, r)
 		})
 

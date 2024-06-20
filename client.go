@@ -283,7 +283,27 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		if err != nil {
 			return nil, nil, err
 		}
+
+		getDefaultDialerFunc := func() (netDialerFunc, error) {
+			dialer, err := proxy.FromURL(proxyURL, netDial)
+			if err != nil {
+				return nil, err
+			}
+			if d, ok := dialer.(proxy.ContextDialer); ok {
+				return d.DialContext, nil
+			} else {
+				return func(ctx context.Context, network, addr string) (net.Conn, error) {
+					return dialer.Dial(network, addr)
+				}, nil
+			}
+		}
+
 		switch {
+		case proxyURL.Scheme == "socks5":
+			netDial, err = getDefaultDialerFunc()
+			if err != nil {
+				return nil, nil, err
+			}
 		case proxyURL == nil:
 			// Do nothing. Not using a proxy.
 		case u.Scheme == "http":
@@ -296,16 +316,9 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		case u.Scheme == "https":
 			netDial = (&httpsProxyDialer{proxyURL: proxyURL, forwardDial: netDial}).DialContext
 		default:
-			dialer, err := proxy.FromURL(proxyURL, netDial)
+			netDial, err = getDefaultDialerFunc()
 			if err != nil {
 				return nil, nil, err
-			}
-			if d, ok := dialer.(proxy.ContextDialer); ok {
-				netDial = d.DialContext
-			} else {
-				netDial = func(ctx context.Context, network, addr string) (net.Conn, error) {
-					return dialer.Dial(network, addr)
-				}
 			}
 		}
 	}
