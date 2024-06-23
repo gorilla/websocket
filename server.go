@@ -6,8 +6,7 @@ package websocket
 
 import (
 	"bufio"
-	"errors"
-	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -178,18 +177,19 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 			"websocket: hijack: "+err.Error())
 	}
 
-	if brw.Reader.Buffered() > 0 {
-		netConn.Close()
-		return nil, errors.New("websocket: client sent data before handshake is complete")
-	}
-
 	var br *bufio.Reader
-	if u.ReadBufferSize == 0 && bufioReaderSize(netConn, brw.Reader) > 256 {
-		// Reuse hijacked buffered reader as connection reader.
+	if u.ReadBufferSize == 0 && brw.Reader.Size() > 256 {
+		// Use hijacked buffered reader as the connection reader.
 		br = brw.Reader
+	} else if brw.Reader.Buffered() > 0 {
+		// Wrap the network connection to read buffered data in brw.Reader
+		// before reading from the network connection. This should be rare
+		// because a client must not send message data before receiving the
+		// handshake response.
+		netConn = &brNetConn{br: brw.Reader, Conn: netConn}
 	}
 
-	buf := bufioWriterBuffer(netConn, brw.Writer)
+	buf := brw.Writer.AvailableBuffer()
 
 	var writeBuf []byte
 	if u.WriteBufferPool == nil && u.WriteBufferSize == 0 && len(buf) >= maxFrameHeaderSize+256 {
@@ -323,39 +323,28 @@ func IsWebSocketUpgrade(r *http.Request) bool {
 		tokenListContainsValue(r.Header, "Upgrade", "websocket")
 }
 
-// bufioReaderSize size returns the size of a bufio.Reader.
-func bufioReaderSize(originalReader io.Reader, br *bufio.Reader) int {
-	// This code assumes that peek on a reset reader returns
-	// bufio.Reader.buf[:0].
-	// TODO: Use bufio.Reader.Size() after Go 1.10
-	br.Reset(originalReader)
-	if p, err := br.Peek(0); err == nil {
-		return cap(p)
+type brNetConn struct {
+	br *bufio.Reader
+	net.Conn
+}
+
+func (b *brNetConn) Read(p []byte) (n int, err error) {
+	if b.br != nil {
+		// Limit read to buferred data.
+		if n := b.br.Buffered(); len(p) > n {
+			p = p[:n]
+		}
+		n, err = b.br.Read(p)
+		if b.br.Buffered() == 0 {
+			b.br = nil
+		}
+		return n, err
 	}
-	return 0
+	return b.Conn.Read(p)
 }
 
-// writeHook is an io.Writer that records the last slice passed to it vio
-// io.Writer.Write.
-type writeHook struct {
-	p []byte
+// NetConn returns the underlying connection that is wrapped by b.
+func (b *brNetConn) NetConn() net.Conn {
+	return b.Conn
 }
 
-func (wh *writeHook) Write(p []byte) (int, error) {
-	wh.p = p
-	return len(p), nil
-}
-
-// bufioWriterBuffer grabs the buffer from a bufio.Writer.
-func bufioWriterBuffer(originalWriter io.Writer, bw *bufio.Writer) []byte {
-	// This code assumes that bufio.Writer.buf[:1] is passed to the
-	// bufio.Writer's underlying writer.
-	var wh writeHook
-	bw.Reset(&wh)
-	bw.WriteByte(0)
-	bw.Flush()
-
-	bw.Reset(originalWriter)
-
-	return wh.p[:cap(wh.p)]
-}
