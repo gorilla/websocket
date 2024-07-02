@@ -14,8 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-
-	"golang.org/x/net/proxy"
 )
 
 type netDialerFunc func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -28,28 +26,12 @@ func (fn netDialerFunc) DialContext(ctx context.Context, network, addr string) (
 	return fn(ctx, network, addr)
 }
 
-func proxyFromURL(proxyURL *url.URL, forwardDial netDialerFunc) (netDialerFunc, error) {
-	if proxyURL.Scheme == "http" {
-		return (&httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDial}).DialContext, nil
-	}
-	dialer, err := proxy.FromURL(proxyURL, forwardDial)
-	if err != nil {
-		return nil, err
-	}
-	if d, ok := dialer.(proxy.ContextDialer); ok {
-		return d.DialContext, nil
-	}
-	return func(ctx context.Context, net, addr string) (net.Conn, error) {
-		return dialer.Dial(net, addr)
-	}, nil
-}
-
-type httpProxyDialer struct {
+type httpsProxyDialer struct {
 	proxyURL    *url.URL
 	forwardDial netDialerFunc
 }
 
-func (hpd *httpProxyDialer) DialContext(ctx context.Context, network string, addr string) (net.Conn, error) {
+func (hpd *httpsProxyDialer) DialContext(ctx context.Context, network string, addr string) (net.Conn, error) {
 	hostPort, _ := hostPortNoPort(hpd.proxyURL)
 	conn, err := hpd.forwardDial(ctx, network, hostPort)
 	if err != nil {
@@ -57,12 +39,8 @@ func (hpd *httpProxyDialer) DialContext(ctx context.Context, network string, add
 	}
 
 	connectHeader := make(http.Header)
-	if user := hpd.proxyURL.User; user != nil {
-		proxyUser := user.Username()
-		if proxyPassword, passwordSet := user.Password(); passwordSet {
-			credential := base64.StdEncoding.EncodeToString([]byte(proxyUser + ":" + proxyPassword))
-			connectHeader.Set("Proxy-Authorization", "Basic "+credential)
-		}
+	if pa := proxyAuth(hpd.proxyURL.User); pa != "" {
+		connectHeader.Set("Proxy-Authorization", pa)
 	}
 
 	connectReq := &http.Request{
@@ -102,4 +80,14 @@ func (hpd *httpProxyDialer) DialContext(ctx context.Context, network string, add
 		return nil, errors.New(f[1])
 	}
 	return conn, nil
+}
+
+func proxyAuth(user *url.Userinfo) string {
+	if user != nil {
+		proxyUser := user.Username()
+		if proxyPassword, passwordSet := user.Password(); passwordSet {
+			return "Basic " + base64.StdEncoding.EncodeToString([]byte(proxyUser+":"+proxyPassword))
+		}
+	}
+	return ""
 }
