@@ -69,9 +69,9 @@ func (b *broadcastBench) makeConns(numConns int) {
 				select {
 				case msg := <-c.msgCh:
 					if msg.prepared != nil {
-						c.conn.WritePreparedMessage(msg.prepared)
+						_ = c.conn.WritePreparedMessage(msg.prepared)
 					} else {
-						c.conn.WriteMessage(TextMessage, msg.payload)
+						_ = c.conn.WriteMessage(TextMessage, msg.payload)
 					}
 					val := atomic.AddInt32(&b.count, 1)
 					if val%int32(numConns) == 0 {

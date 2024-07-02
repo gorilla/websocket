@@ -178,6 +178,18 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 			"websocket: hijack: "+err.Error())
 	}
 
+	// Close the network connection when returning an error. The variable
+	// netConn is set to nil before the success return at the end of the
+	// function.
+	defer func() {
+		if netConn != nil {
+			// It's safe to ignore the error from Close() because this code is
+			// only executed when returning a more important error to the
+			// application.
+			_ = netConn.Close()
+		}
+	}()
+
 	var br *bufio.Reader
 	if u.ReadBufferSize == 0 && brw.Reader.Size() > 256 {
 		// Use hijacked buffered reader as the connection reader.
@@ -244,19 +256,29 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	}
 	p = append(p, "\r\n"...)
 
-	// Clear deadlines set by HTTP server.
-	netConn.SetDeadline(time.Time{})
-
 	if u.HandshakeTimeout > 0 {
-		netConn.SetWriteDeadline(time.Now().Add(u.HandshakeTimeout))
+		if err := netConn.SetWriteDeadline(time.Now().Add(u.HandshakeTimeout)); err != nil {
+			return nil, err
+		}
+	} else {
+		// Clear deadlines set by HTTP server.
+		if err := netConn.SetDeadline(time.Time{}); err != nil {
+			return nil, err
+		}
 	}
+
 	if _, err = netConn.Write(p); err != nil {
-		netConn.Close()
 		return nil, err
 	}
 	if u.HandshakeTimeout > 0 {
-		netConn.SetWriteDeadline(time.Time{})
+		if err := netConn.SetWriteDeadline(time.Time{}); err != nil {
+			return nil, err
+		}
 	}
+
+	// Success! Set netConn to nil to stop the deferred function above from
+	// closing the network connection.
+	netConn = nil
 
 	return c, nil
 }
