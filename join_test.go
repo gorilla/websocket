@@ -19,7 +19,7 @@ func TestJoinMessages(t *testing.T) {
 			wc := newTestConn(nil, &connBuf, true)
 			rc := newTestConn(&connBuf, nil, false)
 			for _, m := range messages {
-				wc.WriteMessage(BinaryMessage, []byte(m))
+				_ = wc.WriteMessage(BinaryMessage, []byte(m))
 			}
 
 			var result bytes.Buffer
