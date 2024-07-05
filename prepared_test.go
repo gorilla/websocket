@@ -45,7 +45,9 @@ func TestPreparedMessage(t *testing.T) {
 		if tt.enableWriteCompression {
 			c.newCompressionWriter = compressNoContextTakeover
 		}
-		c.SetCompressionLevel(tt.compressionLevel)
+		if err := c.SetCompressionLevel(tt.compressionLevel); err != nil {
+			t.Fatal(err)
+		}
 
 		// Seed random number generator for consistent frame mask.
 		testRand.Seed(1234)
