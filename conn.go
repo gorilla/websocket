@@ -1164,7 +1164,7 @@ func (c *Conn) PingHandler() func(appData string) error {
 func (c *Conn) SetPingHandler(h func(appData string) error) {
 	if h == nil {
 		h = func(message string) error {
-			// Make a best effort to send the pong mesage.
+			// Make a best effort to send the pong message.
 			_ = c.WriteControl(PongMessage, []byte(message), time.Now().Add(writeWait))
 			return nil
 		}

@@ -522,7 +522,7 @@ func TestNoUpgrade(t *testing.T) {
 	}
 	resp.Body.Close()
 	if u := resp.Header.Get("Upgrade"); u != "websocket" {
-		t.Errorf("Uprade response header is %q, want %q", u, "websocket")
+		t.Errorf("Upgrade response header is %q, want %q", u, "websocket")
 	}
 	if resp.StatusCode != http.StatusUpgradeRequired {
 		t.Errorf("Status = %d, want %d", resp.StatusCode, http.StatusUpgradeRequired)
