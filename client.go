@@ -256,8 +256,16 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		}
 		if proxyURL != nil {
 			forwardDial := newNetDialerFunc(proxyURL.Scheme, d.NetDial, d.NetDialContext, d.NetDialTLSContext)
-			if proxyURL.Scheme == "http" || proxyURL.Scheme == "https" {
-				netDial = newHTTPProxyDialerFunc(proxyURL, forwardDial)
+			if proxyURL.Scheme == "https" && d.NetDialTLSContext == nil {
+				tlsClientConfig := cloneTLSConfig(d.TLSClientConfig)
+				if d.TLSClientConfig == nil {
+					tlsClientConfig = &tls.Config{
+						ServerName: proxyURL.Hostname(),
+					}
+				}
+				netDial = newHTTPProxyDialerFunc(proxyURL, forwardDial, tlsClientConfig)
+			} else if proxyURL.Scheme == "http" || proxyURL.Scheme == "https" {
+				netDial = newHTTPProxyDialerFunc(proxyURL, forwardDial, nil)
 			} else {
 				dialer, err := proxy.FromURL(proxyURL, forwardDial)
 				if err != nil {

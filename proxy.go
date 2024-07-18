@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"net"
@@ -46,12 +47,24 @@ func (fn netDialerFunc) DialContext(ctx context.Context, network, addr string) (
 	return fn(ctx, network, addr)
 }
 
-func newHTTPProxyDialerFunc(proxyURL *url.URL, forwardDial netDialerFunc) netDialerFunc {
+// newHTTPProxyDialerFunc returns a netDialerFunc that dials using the provided
+// proxyURL. The forwardDial function is used to establish the connection to the
+// proxy server. If tlsClientConfig is not nil, the connection to the proxy is
+// upgraded to a TLS connection with tls.Client.
+func newHTTPProxyDialerFunc(proxyURL *url.URL, forwardDial netDialerFunc, tlsClientConfig *tls.Config) netDialerFunc {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		hostPort, _ := hostPortNoPort(proxyURL)
 		conn, err := forwardDial(ctx, network, hostPort)
 		if err != nil {
 			return nil, err
+		}
+
+		if tlsClientConfig != nil {
+			tlsConn := tls.Client(conn, tlsClientConfig)
+			if err = tlsConn.HandshakeContext(ctx); err != nil {
+				return nil, err
+			}
+			conn = tlsConn
 		}
 
 		connectHeader := make(http.Header)
