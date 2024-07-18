@@ -260,23 +260,6 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		netDial = (&net.Dialer{}).DialContext
 	}
 
-	// If needed, wrap the dial function to set the connection deadline.
-	if deadline, ok := ctx.Deadline(); ok {
-		forwardDial := netDial
-		netDial = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			c, err := forwardDial(ctx, network, addr)
-			if err != nil {
-				return nil, err
-			}
-			err = c.SetDeadline(deadline)
-			if err != nil {
-				c.Close()
-				return nil, err
-			}
-			return c, nil
-		}
-	}
-
 	// If needed, wrap the dial function to connect through a proxy.
 	if d.Proxy != nil {
 		proxyURL, err := d.Proxy(req)
@@ -302,6 +285,23 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 			if err != nil {
 				return nil, nil, err
 			}
+		}
+	}
+
+	// If needed, wrap the dial function to set the connection deadline.
+	if deadline, ok := ctx.Deadline(); ok {
+		forwardDial := netDial
+		netDial = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			c, err := forwardDial(ctx, network, addr)
+			if err != nil {
+				return nil, err
+			}
+			err = c.SetDeadline(deadline)
+			if err != nil {
+				c.Close()
+				return nil, err
+			}
+			return c, nil
 		}
 	}
 
