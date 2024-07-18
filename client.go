@@ -258,10 +258,9 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 			forwardDial := newNetDialerFunc(proxyURL.Scheme, d.NetDial, d.NetDialContext, d.NetDialTLSContext)
 			if proxyURL.Scheme == "https" && d.NetDialTLSContext == nil {
 				tlsClientConfig := cloneTLSConfig(d.TLSClientConfig)
-				if d.TLSClientConfig == nil {
-					tlsClientConfig = &tls.Config{
-						ServerName: proxyURL.Hostname(),
-					}
+				if tlsClientConfig.ServerName == "" {
+					_, hostNoPort := hostPortNoPort(proxyURL)
+					tlsClientConfig.ServerName = hostNoPort
 				}
 				netDial = newHTTPProxyDialerFunc(proxyURL, forwardDial, tlsClientConfig)
 			} else if proxyURL.Scheme == "http" || proxyURL.Scheme == "https" {
@@ -369,7 +368,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 				if proto != "http/1.1" {
 					return nil, nil, fmt.Errorf(
 						"websocket: protocol %q was given but is not supported;"+
-							"sharing tls.Config with net/http Transport can cause this error: %w",
+							"sharing tlsServerName.Config with net/http Transport can cause this error: %w",
 						proto, err,
 					)
 				}
