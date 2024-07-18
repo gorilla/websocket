@@ -246,19 +246,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		defer cancel()
 	}
 
-	var netDial netDialerFunc
-	switch {
-	case u.Scheme == "https" && d.NetDialTLSContext != nil:
-		netDial = d.NetDialTLSContext
-	case d.NetDialContext != nil:
-		netDial = d.NetDialContext
-	case d.NetDial != nil:
-		netDial = func(ctx context.Context, net, addr string) (net.Conn, error) {
-			return d.NetDial(net, addr)
-		}
-	default:
-		netDial = (&net.Dialer{}).DialContext
-	}
+	netDial := newNetDialerFunc(u.Scheme, d.NetDial, d.NetDialContext, d.NetDialTLSContext)
 
 	// If needed, wrap the dial function to connect through a proxy.
 	if d.Proxy != nil {

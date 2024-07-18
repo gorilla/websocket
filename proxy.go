@@ -16,6 +16,26 @@ import (
 	"strings"
 )
 
+func newNetDialerFunc(
+	scheme string,
+	netDial func(network, addr string) (net.Conn, error),
+	netDialContext func(ctx context.Context, network, addr string) (net.Conn, error),
+	netDialTLSContext func(ctx context.Context, network, addr string) (net.Conn, error),
+) netDialerFunc {
+	switch {
+	case scheme == "https" && netDialTLSContext != nil:
+		return netDialTLSContext
+	case netDialContext != nil:
+		return netDialContext
+	case netDial != nil:
+		return func(ctx context.Context, net, addr string) (net.Conn, error) {
+			return netDial(net, addr)
+		}
+	default:
+		return (&net.Dialer{}).DialContext
+	}
+}
+
 type netDialerFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
 func (fn netDialerFunc) Dial(network, addr string) (net.Conn, error) {
