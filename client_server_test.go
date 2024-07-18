@@ -109,17 +109,16 @@ func (s *cstProxyServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	_, _ = fmt.Fprintf(conn, "HTTP/1.1 200 Connection established\r\n\r\n")
 
-	wg := sync.WaitGroup{}
-	wg.Add(2)
+	done := make(chan struct{}, 2)
 	go func() {
-		defer wg.Done()
 		_, _ = io.Copy(upstream, conn)
+		done <- struct{}{}
 	}()
 	go func() {
-		defer wg.Done()
 		_, _ = io.Copy(conn, upstream)
+		done <- struct{}{}
 	}()
-	wg.Wait()
+	<-done
 }
 
 func newProxyServer() *httptest.Server {
