@@ -14,8 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-
-	"golang.org/x/net/proxy"
 )
 
 type netDialerFunc func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -26,22 +24,6 @@ func (fn netDialerFunc) Dial(network, addr string) (net.Conn, error) {
 
 func (fn netDialerFunc) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	return fn(ctx, network, addr)
-}
-
-func proxyFromURL(proxyURL *url.URL, forwardDial netDialerFunc) (netDialerFunc, error) {
-	if proxyURL.Scheme == "http" {
-		return (&httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDial}).DialContext, nil
-	}
-	dialer, err := proxy.FromURL(proxyURL, forwardDial)
-	if err != nil {
-		return nil, err
-	}
-	if d, ok := dialer.(proxy.ContextDialer); ok {
-		return d.DialContext, nil
-	}
-	return func(ctx context.Context, net, addr string) (net.Conn, error) {
-		return dialer.Dial(net, addr)
-	}, nil
 }
 
 type httpProxyDialer struct {
