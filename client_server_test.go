@@ -209,43 +209,6 @@ func sendRecv(t *testing.T, ws *Conn) {
 }
 
 func TestProxyDial(t *testing.T) {
-	s := newServer(t)
-	defer s.Close()
-
-	surl, _ := url.Parse(s.Server.URL)
-
-	cstDialer := cstDialer // make local copy for modification on next line.
-	cstDialer.Proxy = http.ProxyURL(surl)
-
-	connect := false
-	origHandler := s.Server.Config.Handler
-
-	// Capture the request Host header.
-	s.Server.Config.Handler = http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodConnect {
-				connect = true
-				w.WriteHeader(http.StatusOK)
-				return
-			}
-
-			if !connect {
-				t.Log("connect not received")
-				http.Error(w, "connect not received", http.StatusMethodNotAllowed)
-				return
-			}
-			origHandler.ServeHTTP(w, r)
-		})
-
-	ws, _, err := cstDialer.Dial(s.URL, nil)
-	if err != nil {
-		t.Fatalf("Dial: %v", err)
-	}
-	defer ws.Close()
-	sendRecv(t, ws)
-}
-
-func TestProxyDialer(t *testing.T) {
 	testcases := []struct {
 		name               string
 		isTLS              bool
