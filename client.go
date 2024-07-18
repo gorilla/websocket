@@ -255,23 +255,21 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 			return nil, nil, err
 		}
 		if proxyURL != nil {
-			netDial, err = func(proxyURL *url.URL, forwardDial netDialerFunc) (netDialerFunc, error) {
-				if proxyURL.Scheme == "http" {
-					return (&httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDial}).DialContext, nil
-				}
+			forwardDial := newNetDialerFunc(proxyURL.Scheme, d.NetDial, d.NetDialContext, d.NetDialTLSContext)
+			if proxyURL.Scheme == "http" || proxyURL.Scheme == "https" {
+				netDial = newHTTPProxyDialerFunc(proxyURL, forwardDial)
+			} else {
 				dialer, err := proxy.FromURL(proxyURL, forwardDial)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				if d, ok := dialer.(proxy.ContextDialer); ok {
-					return d.DialContext, nil
+					netDial = d.DialContext
+				} else {
+					netDial = func(ctx context.Context, net, addr string) (net.Conn, error) {
+						return dialer.Dial(net, addr)
+					}
 				}
-				return func(ctx context.Context, net, addr string) (net.Conn, error) {
-					return dialer.Dial(net, addr)
-				}, nil
-			}(proxyURL, netDial)
-			if err != nil {
-				return nil, nil, err
 			}
 		}
 	}
