@@ -34,6 +34,7 @@ var errInvalidCompression = errors.New("websocket: invalid compression negotiati
 // If the WebSocket handshake fails, ErrBadHandshake is returned along with a
 // non-nil *http.Response so that callers can handle redirects, authentication,
 // etc.
+// All non-101 response codes result in an error.
 //
 // Deprecated: Use Dialer instead.
 func NewClient(netConn net.Conn, u *url.URL, requestHeader http.Header, readBufSize, writeBufSize int) (c *Conn, response *http.Response, err error) {
@@ -154,7 +155,9 @@ var nilDialer = *DefaultDialer
 //
 // If the WebSocket handshake fails, ErrBadHandshake is returned along with a
 // non-nil *http.Response so that callers can handle redirects, authentication,
-// etcetera. The response body may not contain the entire response and does not
+// etcetera.
+// All non-101 response codes result in an error.
+// The response body may not contain the entire response and does not
 // need to be closed by the application.
 func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader http.Header) (*Conn, *http.Response, error) {
 	if d == nil {
