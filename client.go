@@ -317,6 +317,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		}
 	}()
 
+	var tlsState *tls.ConnectionState
 	if u.Scheme == "https" && d.NetDialTLSContext == nil {
 		// If NetDialTLSContext is set, assume that the TLS handshake has already been done
 
@@ -330,13 +331,18 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		if trace != nil && trace.TLSHandshakeStart != nil {
 			trace.TLSHandshakeStart()
 		}
-		err := doHandshake(ctx, tlsConn, cfg)
-		if trace != nil && trace.TLSHandshakeDone != nil {
-			trace.TLSHandshakeDone(tlsConn.ConnectionState(), err)
-		}
 
-		if err != nil {
+		if err := doHandshake(ctx, tlsConn, cfg); err != nil {
+			if trace != nil && trace.TLSHandshakeDone != nil {
+				trace.TLSHandshakeDone(tls.ConnectionState{}, err)
+			}
 			return nil, nil, err
+		} else {
+			cs := tlsConn.ConnectionState()
+			if trace != nil && trace.TLSHandshakeDone != nil {
+				trace.TLSHandshakeDone(cs, nil)
+			}
+			tlsState = &cs
 		}
 	}
 
@@ -372,6 +378,10 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		if rc := resp.Cookies(); len(rc) > 0 {
 			d.Jar.SetCookies(u, rc)
 		}
+	}
+
+	if resp.TLS == nil && tlsState != nil {
+		resp.TLS = tlsState
 	}
 
 	if resp.StatusCode != 101 ||
