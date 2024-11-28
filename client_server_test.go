@@ -330,6 +330,25 @@ func TestDialTLS(t *testing.T) {
 	sendRecv(t, ws)
 }
 
+func TestDialTLSConnState(t *testing.T) {
+	s := newTLSServer(t)
+	defer s.Close()
+
+	d := cstDialer
+	d.TLSClientConfig = &tls.Config{RootCAs: rootCAs(t, s.Server)}
+	ws, resp, err := d.Dial(s.URL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	if resp.TLS == nil {
+		t.Errorf("http response tls is nil")
+	} else if len(resp.TLS.PeerCertificates) == 0 {
+		t.Errorf("http response PeerCertificates count is 0")
+	}
+	defer ws.Close()
+	sendRecv(t, ws)
+}
+
 func TestDialTimeout(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()
