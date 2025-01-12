@@ -220,11 +220,15 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 			if len(vs) > 0 {
 				req.Host = vs[0]
 			}
+		case k == "Sec-Websocket-Extensions":
+			if d.EnableCompression {
+				req.Header["Sec-WebSocket-Extensions"] = vs
+			}
+
 		case k == "Upgrade" ||
 			k == "Connection" ||
 			k == "Sec-Websocket-Key" ||
 			k == "Sec-Websocket-Version" ||
-			k == "Sec-Websocket-Extensions" ||
 			(k == "Sec-Websocket-Protocol" && len(d.Subprotocols) > 0):
 			return nil, nil, errors.New("websocket: duplicate header not allowed: " + k)
 		case k == "Sec-Websocket-Protocol":
@@ -234,7 +238,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		}
 	}
 
-	if d.EnableCompression {
+	if d.EnableCompression && requestHeader.Get("Sec-WebSocket-Extensions") == "" {
 		req.Header["Sec-WebSocket-Extensions"] = []string{"permessage-deflate; server_no_context_takeover; client_no_context_takeover"}
 	}
 
