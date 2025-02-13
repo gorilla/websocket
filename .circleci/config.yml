@@ -17,7 +17,7 @@ jobs:
         default: ""
     docker:
       - image: "cimg/go:<< parameters.version >>"
-    working_directory: /home/circleci/project/go/src/github.com/gorilla/websocket
+    working_directory: /home/circleci/project/go/src/github.com/john-markham/websocket
     environment:
       GO111MODULE: "on"
       GOPROXY: "<< parameters.goproxy >>"
