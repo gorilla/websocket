@@ -29,7 +29,7 @@ func (fn netDialerFunc) DialContext(ctx context.Context, network, addr string) (
 }
 
 func proxyFromURL(proxyURL *url.URL, forwardDial netDialerFunc) (netDialerFunc, error) {
-	if proxyURL.Scheme == "http" {
+	if proxyURL.Scheme == "http" || proxyURL.Scheme == "https" {
 		return (&httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDial}).DialContext, nil
 	}
 	dialer, err := proxy.FromURL(proxyURL, forwardDial)
@@ -64,7 +64,6 @@ func (hpd *httpProxyDialer) DialContext(ctx context.Context, network string, add
 			connectHeader.Set("Proxy-Authorization", "Basic "+credential)
 		}
 	}
-
 	connectReq := &http.Request{
 		Method: http.MethodConnect,
 		URL:    &url.URL{Opaque: addr},
