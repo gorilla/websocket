@@ -250,10 +250,9 @@ type Conn struct {
 	writeBufSize  int
 	writeDeadline time.Time
 	writer        io.WriteCloser // the current writer returned to the application
-	isWriting     bool           // for best-effort concurrent write detection
-
-	writeErrMu sync.Mutex
-	writeErr   error
+	writeMux      *sync.Mutex
+	writeErrMu    sync.Mutex
+	writeErr      error
 
 	enableWriteCompression bool
 	compressionLevel       int
@@ -313,6 +312,7 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, 
 		writeBuf:               writeBuf,
 		writePool:              writeBufferPool,
 		writeBufSize:           writeBufferSize,
+		writeMux:               &sync.Mutex{},
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
 	}
@@ -377,8 +377,8 @@ func (c *Conn) read(n int) ([]byte, error) {
 }
 
 func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error {
-	<-c.mu
-	defer func() { c.mu <- struct{}{} }()
+	c.writeMux.Lock()
+	defer c.writeMux.Unlock()
 
 	c.writeErrMu.Lock()
 	err := c.writeErr
@@ -622,17 +622,7 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 	// concurrent writes. See the concurrency section in the package
 	// documentation for more info.
 
-	if c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = true
-
 	err := c.write(w.frameType, c.writeDeadline, c.writeBuf[framePos:w.pos], extra)
-
-	if !c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = false
 
 	if err != nil {
 		return w.endMessage(err)
@@ -750,15 +740,7 @@ func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 	if err != nil {
 		return err
 	}
-	if c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = true
 	err = c.write(frameType, c.writeDeadline, frameData, nil)
-	if !c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = false
 	return err
 }
 

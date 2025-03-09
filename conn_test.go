@@ -691,37 +691,21 @@ func TestUnexpectedCloseErrors(t *testing.T) {
 	}
 }
 
-type blockingWriter struct {
-	c1, c2 chan struct{}
-}
-
-func (w blockingWriter) Write(p []byte) (int, error) {
-	// Allow main to continue
-	close(w.c1)
-	// Wait for panic in main
-	<-w.c2
-	return len(p), nil
-}
-
-func TestConcurrentWritePanic(t *testing.T) {
-	w := blockingWriter{make(chan struct{}), make(chan struct{})}
-	c := newTestConn(nil, w, false)
-	go func() {
-		_ = c.WriteMessage(TextMessage, []byte{})
-	}()
-
-	// wait for goroutine to block in write.
-	<-w.c1
-
-	defer func() {
-		close(w.c2)
-		if v := recover(); v != nil {
-			return
+func TestConcurrentWrites(t *testing.T) {
+	var connBuf bytes.Buffer
+	c := newTestConn(nil, &connBuf, false)
+	nGoroutines := 5
+	done := make(chan error, nGoroutines)
+	for i := 0; i < nGoroutines; i++ {
+		go func() {
+			err := c.WriteMessage(TextMessage, []byte{})
+			done <- err
+		}()
+		err := <-done
+		if err != nil {
+			t.Fatal(err)
 		}
-	}()
-
-	_ = c.WriteMessage(TextMessage, []byte{})
-	t.Fatal("should not get here")
+	}
 }
 
 type failingReader struct{}
