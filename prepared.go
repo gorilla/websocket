@@ -76,7 +76,6 @@ func (pm *PreparedMessage) frame(key prepareKey) (int, []byte, error) {
 		var nc prepareConn
 		c := &Conn{
 			conn:                   &nc,
-			writeMux:               &sync.Mutex{},
 			isServer:               key.isServer,
 			compressionLevel:       key.compressionLevel,
 			enableWriteCompression: true,

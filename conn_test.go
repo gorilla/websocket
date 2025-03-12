@@ -691,21 +691,120 @@ func TestUnexpectedCloseErrors(t *testing.T) {
 	}
 }
 
-func TestConcurrentWrites(t *testing.T) {
-	var connBuf bytes.Buffer
-	c := newTestConn(nil, &connBuf, false)
-	nGoroutines := 5
-	done := make(chan error, nGoroutines)
-	for i := 0; i < nGoroutines; i++ {
-		go func() {
-			err := c.WriteMessage(TextMessage, []byte{})
-			done <- err
-		}()
-		err := <-done
-		if err != nil {
-			t.Fatal(err)
+func TestConcurrencyNextWriter(t *testing.T) {
+	loop := 10
+	workers := 10
+	for i := 0; i < loop; i++ {
+		var connBuf bytes.Buffer
+
+		wg := sync.WaitGroup{}
+		wc := newTestConn(nil, &connBuf, true)
+
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if _, err := wc.NextWriter(TextMessage); err != nil {
+					t.Errorf("concurrently wc.NextWriter() returned %v", err)
+				}
+			}()
 		}
+
+		wg.Wait()
+		wc.Close()
 	}
+}
+
+func TestConcurrencyWriteMessage(t *testing.T) {
+	const message = "this is a pong messsage"
+	loop := 10
+	workers := 10
+	for i := 0; i < loop; i++ {
+		var connBuf bytes.Buffer
+
+		wg := sync.WaitGroup{}
+		wc := newTestConn(nil, &connBuf, true)
+
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := wc.WriteMessage(PongMessage, []byte(message)); err != nil {
+					t.Errorf("concurrently wc.WriteMessage() returned %v", err)
+				}
+			}()
+		}
+
+		wg.Wait()
+		wc.Close()
+	}
+}
+
+func TestConcurrencySetWriteDeadline(t *testing.T) {
+	loop := 10
+	workers := 10
+	for i := 0; i < loop; i++ {
+		var connBuf bytes.Buffer
+
+		wg := sync.WaitGroup{}
+		wc := newTestConn(nil, &connBuf, true)
+
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := wc.SetWriteDeadline(time.Now()); err != nil {
+					t.Errorf("concurrently wc.SetWriteDeadline() returned %v", err)
+				}
+			}()
+		}
+
+		wg.Wait()
+		wc.Close()
+	}
+}
+
+func TestConcurrencySetCompressionLevel(t *testing.T) {
+	loop := 10
+	workers := 10
+	for i := 0; i < loop; i++ {
+		var connBuf bytes.Buffer
+
+		wg := sync.WaitGroup{}
+		wc := newTestConn(nil, &connBuf, true)
+
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := wc.SetCompressionLevel(defaultCompressionLevel); err != nil {
+					t.Errorf("concurrently wc.SetCompressionLevel() returned %v", err)
+				}
+			}()
+		}
+
+		wg.Wait()
+		wc.Close()
+	}
+}
+
+func TestConcurrentEnableWriteCompressionCalls(t *testing.T) {
+	var connBuf bytes.Buffer
+	wc := newTestConn(nil, &connBuf, false)
+	nGoroutines := 5
+	wg := &sync.WaitGroup{}
+	for i := 0; i < nGoroutines; i++ {
+		wg.Add(1)
+		go func(wg *sync.WaitGroup) {
+			wc.EnableWriteCompression(true)
+			wg.Done()
+		}(wg)
+	}
+	wg.Wait()
+	if !wc.enableWriteCompression {
+		t.Fatal("expected to enableWriteCompression to be true")
+	}
+	wc.Close()
 }
 
 type failingReader struct{}
