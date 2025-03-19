@@ -37,6 +37,31 @@ func TestJSON(t *testing.T) {
 	}
 }
 
+func TestConcurrentWriteJsonCalls(t *testing.T) {
+	var buf bytes.Buffer
+	wc := newTestConn(nil, &buf, false)
+	var jsonMsg struct {
+		A int
+		B string
+	}
+	jsonMsg.A = 1
+	jsonMsg.B = "hello"
+	nGoroutines := 5
+	done := make(chan error, nGoroutines)
+	for i := 0; i < nGoroutines; i++ {
+		go func() {
+			err := wc.WriteJSON(jsonMsg)
+			done <- err
+		}()
+	}
+	for i := 0; i < nGoroutines; i++ {
+		err := <-done
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestPartialJSONRead(t *testing.T) {
 	var buf0, buf1 bytes.Buffer
 	wc := newTestConn(nil, &buf0, true)

@@ -244,20 +244,23 @@ type Conn struct {
 	subprotocol string
 
 	// Write fields
-	mu            chan struct{} // used as mutex to protect write to conn
-	writeBuf      []byte        // frame is constructed in this buffer.
-	writePool     BufferPool
-	writeBufSize  int
-	writeDeadline time.Time
-	writer        io.WriteCloser // the current writer returned to the application
-	isWriting     bool           // for best-effort concurrent write detection
+	writeMux         sync.Mutex    // used to protect WriteMessage and WriteJSON from being called concurrently
+	mu               chan struct{} // used in WriteControl to reset the timer when new messages are written
+	writeBuf         []byte        // frame is constructed in this buffer.
+	writePool        BufferPool
+	writeBufSize     int
+	writeDeadline    time.Time
+	writeDeadlineMux sync.Mutex
+	writer           io.WriteCloser // the current writer returned to the application
+	writerMux        sync.Mutex     // used to protect the writer attached to the connection
+	writeErr         error
+	writeErrMu       sync.Mutex
 
-	writeErrMu sync.Mutex
-	writeErr   error
-
-	enableWriteCompression bool
-	compressionLevel       int
-	newCompressionWriter   func(io.WriteCloser, int) io.WriteCloser
+	enableWriteCompression    bool
+	enableWriteCompressionMux sync.Mutex
+	compressionLevel          int
+	compressionLevelMux       sync.Mutex
+	newCompressionWriter      func(io.WriteCloser, int) io.WriteCloser
 
 	// Read fields
 	reader  io.ReadCloser // the current reader returned to the application
@@ -377,9 +380,6 @@ func (c *Conn) read(n int) ([]byte, error) {
 }
 
 func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error {
-	<-c.mu
-	defer func() { c.mu <- struct{}{} }()
-
 	c.writeErrMu.Lock()
 	err := c.writeErr
 	c.writeErrMu.Unlock()
@@ -525,6 +525,8 @@ func (c *Conn) beginMessage(mw *messageWriter, messageType int) error {
 // All message types (TextMessage, BinaryMessage, CloseMessage, PingMessage and
 // PongMessage) are supported.
 func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
+	c.writerMux.Lock()
+	defer c.writerMux.Unlock()
 	var mw messageWriter
 	if err := c.beginMessage(&mw, messageType); err != nil {
 		return nil, err
@@ -622,17 +624,7 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 	// concurrent writes. See the concurrency section in the package
 	// documentation for more info.
 
-	if c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = true
-
 	err := c.write(w.frameType, c.writeDeadline, c.writeBuf[framePos:w.pos], extra)
-
-	if !c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = false
 
 	if err != nil {
 		return w.endMessage(err)
@@ -750,22 +742,15 @@ func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 	if err != nil {
 		return err
 	}
-	if c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = true
 	err = c.write(frameType, c.writeDeadline, frameData, nil)
-	if !c.isWriting {
-		panic("concurrent write to websocket connection")
-	}
-	c.isWriting = false
 	return err
 }
 
 // WriteMessage is a helper method for getting a writer using NextWriter,
 // writing the message and closing the writer.
 func (c *Conn) WriteMessage(messageType int, data []byte) error {
-
+	c.writeMux.Lock()
+	defer c.writeMux.Unlock()
 	if c.isServer && (c.newCompressionWriter == nil || !c.enableWriteCompression) {
 		// Fast path with no allocations and single frame.
 
@@ -794,6 +779,8 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 // all future writes will return an error. A zero value for t means writes will
 // not time out.
 func (c *Conn) SetWriteDeadline(t time.Time) error {
+	c.writeDeadlineMux.Lock()
+	defer c.writeDeadlineMux.Unlock()
 	c.writeDeadline = t
 	return nil
 }
@@ -1215,6 +1202,8 @@ func (c *Conn) UnderlyingConn() net.Conn {
 // subsequent text and binary messages. This function is a noop if
 // compression was not negotiated with the peer.
 func (c *Conn) EnableWriteCompression(enable bool) {
+	c.enableWriteCompressionMux.Lock()
+	defer c.enableWriteCompressionMux.Unlock()
 	c.enableWriteCompression = enable
 }
 
@@ -1226,6 +1215,8 @@ func (c *Conn) SetCompressionLevel(level int) error {
 	if !isValidCompressionLevel(level) {
 		return errors.New("websocket: invalid compression level")
 	}
+	c.compressionLevelMux.Lock()
+	defer c.compressionLevelMux.Unlock()
 	c.compressionLevel = level
 	return nil
 }

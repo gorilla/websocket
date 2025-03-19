@@ -691,37 +691,120 @@ func TestUnexpectedCloseErrors(t *testing.T) {
 	}
 }
 
-type blockingWriter struct {
-	c1, c2 chan struct{}
-}
+func TestConcurrencyNextWriter(t *testing.T) {
+	loop := 10
+	workers := 10
+	for i := 0; i < loop; i++ {
+		var connBuf bytes.Buffer
 
-func (w blockingWriter) Write(p []byte) (int, error) {
-	// Allow main to continue
-	close(w.c1)
-	// Wait for panic in main
-	<-w.c2
-	return len(p), nil
-}
+		wg := sync.WaitGroup{}
+		wc := newTestConn(nil, &connBuf, true)
 
-func TestConcurrentWritePanic(t *testing.T) {
-	w := blockingWriter{make(chan struct{}), make(chan struct{})}
-	c := newTestConn(nil, w, false)
-	go func() {
-		_ = c.WriteMessage(TextMessage, []byte{})
-	}()
-
-	// wait for goroutine to block in write.
-	<-w.c1
-
-	defer func() {
-		close(w.c2)
-		if v := recover(); v != nil {
-			return
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if _, err := wc.NextWriter(TextMessage); err != nil {
+					t.Errorf("concurrently wc.NextWriter() returned %v", err)
+				}
+			}()
 		}
-	}()
 
-	_ = c.WriteMessage(TextMessage, []byte{})
-	t.Fatal("should not get here")
+		wg.Wait()
+		wc.Close()
+	}
+}
+
+func TestConcurrencyWriteMessage(t *testing.T) {
+	const message = "this is a pong messsage"
+	loop := 10
+	workers := 10
+	for i := 0; i < loop; i++ {
+		var connBuf bytes.Buffer
+
+		wg := sync.WaitGroup{}
+		wc := newTestConn(nil, &connBuf, true)
+
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := wc.WriteMessage(PongMessage, []byte(message)); err != nil {
+					t.Errorf("concurrently wc.WriteMessage() returned %v", err)
+				}
+			}()
+		}
+
+		wg.Wait()
+		wc.Close()
+	}
+}
+
+func TestConcurrencySetWriteDeadline(t *testing.T) {
+	loop := 10
+	workers := 10
+	for i := 0; i < loop; i++ {
+		var connBuf bytes.Buffer
+
+		wg := sync.WaitGroup{}
+		wc := newTestConn(nil, &connBuf, true)
+
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := wc.SetWriteDeadline(time.Now()); err != nil {
+					t.Errorf("concurrently wc.SetWriteDeadline() returned %v", err)
+				}
+			}()
+		}
+
+		wg.Wait()
+		wc.Close()
+	}
+}
+
+func TestConcurrencySetCompressionLevel(t *testing.T) {
+	loop := 10
+	workers := 10
+	for i := 0; i < loop; i++ {
+		var connBuf bytes.Buffer
+
+		wg := sync.WaitGroup{}
+		wc := newTestConn(nil, &connBuf, true)
+
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := wc.SetCompressionLevel(defaultCompressionLevel); err != nil {
+					t.Errorf("concurrently wc.SetCompressionLevel() returned %v", err)
+				}
+			}()
+		}
+
+		wg.Wait()
+		wc.Close()
+	}
+}
+
+func TestConcurrentEnableWriteCompressionCalls(t *testing.T) {
+	var connBuf bytes.Buffer
+	wc := newTestConn(nil, &connBuf, false)
+	nGoroutines := 5
+	wg := &sync.WaitGroup{}
+	for i := 0; i < nGoroutines; i++ {
+		wg.Add(1)
+		go func(wg *sync.WaitGroup) {
+			wc.EnableWriteCompression(true)
+			wg.Done()
+		}(wg)
+	}
+	wg.Wait()
+	if !wc.enableWriteCompression {
+		t.Fatal("expected to enableWriteCompression to be true")
+	}
+	wc.Close()
 }
 
 type failingReader struct{}

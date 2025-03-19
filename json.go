@@ -21,6 +21,8 @@ func WriteJSON(c *Conn, v interface{}) error {
 // See the documentation for encoding/json Marshal for details about the
 // conversion of Go values to JSON.
 func (c *Conn) WriteJSON(v interface{}) error {
+	c.writeMux.Lock()
+	defer c.writeMux.Unlock()
 	w, err := c.NextWriter(TextMessage)
 	if err != nil {
 		return err

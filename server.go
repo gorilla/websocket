@@ -370,4 +370,3 @@ func (b *brNetConn) Read(p []byte) (n int, err error) {
 func (b *brNetConn) NetConn() net.Conn {
 	return b.Conn
 }
-
