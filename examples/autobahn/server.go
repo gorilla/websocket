@@ -42,9 +42,6 @@ func echoCopy(w http.ResponseWriter, r *http.Request, writerOnly bool) {
 			}
 			return
 		}
-		if mt == websocket.TextMessage {
-			r = &validator{r: r}
-		}
 		w, err := conn.NextWriter(mt)
 		if err != nil {
 			log.Println("NextWriter:", err)
