@@ -205,7 +205,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	buf := brw.Writer.AvailableBuffer()
 
 	var writeBuf []byte
-	if u.WriteBufferPool == nil && u.WriteBufferSize == 0 && len(buf) >= maxFrameHeaderSize+256 {
+	if u.WriteBufferPool == nil && u.WriteBufferSize == 0 && cap(buf) >= maxFrameHeaderSize+256 {
 		// Reuse hijacked write buffer as connection buffer.
 		writeBuf = buf
 	}
@@ -370,4 +370,3 @@ func (b *brNetConn) Read(p []byte) (n int, err error) {
 func (b *brNetConn) NetConn() net.Conn {
 	return b.Conn
 }
-
