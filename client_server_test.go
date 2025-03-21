@@ -207,39 +207,54 @@ func TestProxyAuthorizationDial(t *testing.T) {
 	defer s.Close()
 
 	surl, _ := url.Parse(s.Server.URL)
-	surl.User = url.UserPassword("username", "password")
 
 	cstDialer := cstDialer // make local copy for modification on next line.
 	cstDialer.Proxy = http.ProxyURL(surl)
 
-	connect := false
 	origHandler := s.Server.Config.Handler
 
-	// Capture the request Host header.
-	s.Server.Config.Handler = http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			proxyAuth := r.Header.Get("Proxy-Authorization")
-			expectedProxyAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte("username:password"))
-			if r.Method == http.MethodConnect && proxyAuth == expectedProxyAuth {
-				connect = true
-				w.WriteHeader(http.StatusOK)
-				return
-			}
-
-			if !connect {
-				t.Log("connect with proxy authorization not received")
-				http.Error(w, "connect with proxy authorization not received", http.StatusMethodNotAllowed)
-				return
-			}
-			origHandler.ServeHTTP(w, r)
-		})
-
-	ws, _, err := cstDialer.Dial(s.URL, nil)
-	if err != nil {
-		t.Fatalf("Dial: %v", err)
+	tests := []struct {
+		user              *url.Userinfo
+		expectedProxyAuth string
+	}{
+		{
+			user:              url.UserPassword("username", "password"),
+			expectedProxyAuth: "Basic " + base64.StdEncoding.EncodeToString([]byte("username:password")),
+		},
+		{
+			user:              url.User("username"),
+			expectedProxyAuth: "Basic " + base64.StdEncoding.EncodeToString([]byte("username:")),
+		},
 	}
-	defer ws.Close()
-	sendRecv(t, ws)
+
+	for _, tc := range tests {
+		surl.User = tc.user
+		connect := false
+		// Capture the request Host header.
+		s.Server.Config.Handler = http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				proxyAuth := r.Header.Get("Proxy-Authorization")
+				if r.Method == http.MethodConnect && proxyAuth == tc.expectedProxyAuth {
+					connect = true
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+
+				if !connect {
+					t.Log("connect with proxy authorization not received")
+					http.Error(w, "connect with proxy authorization not received", http.StatusMethodNotAllowed)
+					return
+				}
+				origHandler.ServeHTTP(w, r)
+			})
+
+		ws, _, err := cstDialer.Dial(s.URL, nil)
+		if err != nil {
+			t.Fatalf("Dial: %v", err)
+		}
+		defer ws.Close()
+		sendRecv(t, ws)
+	}
 }
 
 func TestDial(t *testing.T) {
