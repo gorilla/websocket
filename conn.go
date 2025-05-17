@@ -252,6 +252,8 @@ type Conn struct {
 	writer        io.WriteCloser // the current writer returned to the application
 	isWriting     bool           // for best-effort concurrent write detection
 
+	maskKeyGenerator func() [4]byte
+
 	writeErrMu sync.Mutex
 	writeErr   error
 
@@ -315,6 +317,7 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, 
 		writeBufSize:           writeBufferSize,
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
+		maskKeyGenerator:       newMaskKey,
 	}
 	c.SetCloseHandler(nil)
 	c.SetPingHandler(nil)
@@ -432,7 +435,7 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 	if c.isServer {
 		buf = append(buf, data...)
 	} else {
-		key := newMaskKey()
+		key := c.maskKeyGenerator()
 		buf = append(buf, key[:]...)
 		buf = append(buf, data...)
 		maskBytes(key, 0, buf[6:])
@@ -610,7 +613,7 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 	}
 
 	if !c.isServer {
-		key := newMaskKey()
+		key := c.maskKeyGenerator()
 		copy(c.writeBuf[maxFrameHeaderSize-4:], key[:])
 		maskBytes(key, 0, c.writeBuf[maxFrameHeaderSize:w.pos])
 		if len(extra) > 0 {
@@ -1228,6 +1231,22 @@ func (c *Conn) SetCompressionLevel(level int) error {
 	}
 	c.compressionLevel = level
 	return nil
+}
+
+// SetMaskKeyGenerator configures the cryptographic function for generating frame mask keys
+// in client mode. The default implementation utilizes crypto/rand to produce cryptographically
+// secure random keys.
+//
+// Security Note: When operating over secure transport layers (e.g., TLS 1.2+/SSL),
+// implementations MAY return a zero-value key ([4]byte{0,0,0,0}) to disable payload masking
+// as specified in RFC 6455 Section 5.3. This optimization eliminates redundant masking
+// computations while maintaining protocol compliance.
+//
+// The generator function must always return a valid 4-byte array.
+func (c *Conn) SetMaskKeyGenerator(fn func() [4]byte) {
+	if fn != nil {
+		c.maskKeyGenerator = fn
+	}
 }
 
 // FormatCloseMessage formats closeCode and text as a WebSocket close message.
