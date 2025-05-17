@@ -252,6 +252,8 @@ type Conn struct {
 	writer        io.WriteCloser // the current writer returned to the application
 	isWriting     bool           // for best-effort concurrent write detection
 
+	disableClientMask bool
+
 	writeErrMu sync.Mutex
 	writeErr   error
 
@@ -315,6 +317,7 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, 
 		writeBufSize:           writeBufferSize,
 		enableWriteCompression: true,
 		compressionLevel:       defaultCompressionLevel,
+		disableClientMask:      false,
 	}
 	c.SetCloseHandler(nil)
 	c.SetPingHandler(nil)
@@ -432,7 +435,12 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 	if c.isServer {
 		buf = append(buf, data...)
 	} else {
-		key := newMaskKey()
+		var key [4]byte
+		if c.disableClientMask {
+			key = [4]byte{0, 0, 0, 0}
+		} else {
+			key = newMaskKey()
+		}
 		buf = append(buf, key[:]...)
 		buf = append(buf, data...)
 		maskBytes(key, 0, buf[6:])
@@ -610,7 +618,12 @@ func (w *messageWriter) flushFrame(final bool, extra []byte) error {
 	}
 
 	if !c.isServer {
-		key := newMaskKey()
+		var key [4]byte
+		if c.disableClientMask {
+			key = [4]byte{0, 0, 0, 0}
+		} else {
+			key = newMaskKey()
+		}
 		copy(c.writeBuf[maxFrameHeaderSize-4:], key[:])
 		maskBytes(key, 0, c.writeBuf[maxFrameHeaderSize:w.pos])
 		if len(extra) > 0 {
@@ -743,9 +756,10 @@ func (w *messageWriter) Close() error {
 // WritePreparedMessage writes prepared message into connection.
 func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 	frameType, frameData, err := pm.frame(prepareKey{
-		isServer:         c.isServer,
-		compress:         c.newCompressionWriter != nil && c.enableWriteCompression && isData(pm.messageType),
-		compressionLevel: c.compressionLevel,
+		isServer:          c.isServer,
+		compress:          c.newCompressionWriter != nil && c.enableWriteCompression && isData(pm.messageType),
+		compressionLevel:  c.compressionLevel,
+		disableClientMask: c.disableClientMask,
 	})
 	if err != nil {
 		return err
@@ -1228,6 +1242,20 @@ func (c *Conn) SetCompressionLevel(level int) error {
 	}
 	c.compressionLevel = level
 	return nil
+}
+
+// SetDisableClientMask configures WebSocket payload masking behavior for client-mode frames.
+// When enabled (true), implements protocol-allowed optimization
+// by generating zero-value mask keys ([4]byte{0,0,0,0}), effectively omitting XOR operations
+// while maintaining formal protocol compliance.
+//
+// Security Advisory:
+// - Safe to enable ONLY when using secure transport layers (TLS 1.2+/SSL)
+// - May expose vulnerabilities to network intermediaries when unprotected
+//
+// Default: false (masking enabled) - Maintains protocol compliance for plaintext connections
+func (c *Conn) SetDisableClientMask(value bool) {
+	c.disableClientMask = value
 }
 
 // FormatCloseMessage formats closeCode and text as a WebSocket close message.

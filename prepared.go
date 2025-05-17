@@ -25,9 +25,10 @@ type PreparedMessage struct {
 
 // prepareKey defines a unique set of options to cache prepared frames in PreparedMessage.
 type prepareKey struct {
-	isServer         bool
-	compress         bool
-	compressionLevel int
+	isServer          bool
+	compress          bool
+	compressionLevel  int
+	disableClientMask bool
 }
 
 // preparedFrame contains data in wire representation.
@@ -83,6 +84,7 @@ func (pm *PreparedMessage) frame(key prepareKey) (int, []byte, error) {
 			compressionLevel:       key.compressionLevel,
 			enableWriteCompression: true,
 			writeBuf:               make([]byte, defaultWriteBufferSize+maxFrameHeaderSize),
+			disableClientMask:      key.disableClientMask,
 		}
 		if key.compress {
 			c.newCompressionWriter = compressNoContextTakeover
