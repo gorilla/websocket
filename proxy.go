@@ -28,9 +28,9 @@ func (fn netDialerFunc) DialContext(ctx context.Context, network, addr string) (
 	return fn(ctx, network, addr)
 }
 
-func proxyFromURL(proxyURL *url.URL, forwardDial netDialerFunc) (netDialerFunc, error) {
+func proxyFromURL(proxyURL *url.URL, forwardDial netDialerFunc, connectHeader http.Header) (netDialerFunc, error) {
 	if proxyURL.Scheme == "http" || proxyURL.Scheme == "https" {
-		return (&httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDial}).DialContext, nil
+		return (&httpProxyDialer{proxyURL: proxyURL, forwardDial: forwardDial, proxyConnectHeader: connectHeader}).DialContext, nil
 	}
 	dialer, err := proxy.FromURL(proxyURL, forwardDial)
 	if err != nil {
@@ -45,8 +45,13 @@ func proxyFromURL(proxyURL *url.URL, forwardDial netDialerFunc) (netDialerFunc, 
 }
 
 type httpProxyDialer struct {
-	proxyURL    *url.URL
-	forwardDial netDialerFunc
+	proxyURL           *url.URL
+	forwardDial        netDialerFunc
+	proxyConnectHeader http.Header
+}
+
+func (hpd *httpProxyDialer) Dial(network, addr string) (net.Conn, error) {
+	return hpd.DialContext(context.Background(), network, addr)
 }
 
 func (hpd *httpProxyDialer) DialContext(ctx context.Context, network string, addr string) (net.Conn, error) {
@@ -56,7 +61,11 @@ func (hpd *httpProxyDialer) DialContext(ctx context.Context, network string, add
 		return nil, err
 	}
 
-	connectHeader := make(http.Header)
+	connectHeader := hpd.proxyConnectHeader
+	if hpd.proxyConnectHeader == nil {
+		connectHeader = make(http.Header)
+	}
+
 	if user := hpd.proxyURL.User; user != nil {
 		proxyUser := user.Username()
 		if proxyPassword, passwordSet := user.Password(); passwordSet {
