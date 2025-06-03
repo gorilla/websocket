@@ -87,6 +87,9 @@ type Dialer struct {
 	// If Proxy is nil or returns a nil *URL, no proxy is used.
 	Proxy func(*http.Request) (*url.URL, error)
 
+	// ProxyConnectHeader specifies optional headers to use during proxy connect requests.
+	ProxyConnectHeader http.Header
+
 	// TLSClientConfig specifies the TLS configuration to use with tls.Client.
 	// If nil, the default configuration is used.
 	// If NetDialTLSContext is set, Dial assumes the TLS handshake
@@ -416,7 +419,7 @@ func (d *Dialer) netDialFn(ctx context.Context, proxyURL *url.URL, backendURL *u
 	}
 	// Proxy dialing is wrapped to implement CONNECT method and possibly proxy auth.
 	if proxyURL != nil {
-		return proxyFromURL(proxyURL, netDial)
+		return proxyFromURL(proxyURL, netDial, d.ProxyConnectHeader)
 	}
 	return netDial, nil
 }

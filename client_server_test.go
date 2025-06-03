@@ -242,6 +242,46 @@ func TestProxyAuthorizationDial(t *testing.T) {
 	sendRecv(t, ws)
 }
 
+func TestProxyDialConnectHeaders(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	surl, _ := url.Parse(s.Server.URL)
+
+	cstDialer := cstDialer // make local copy for modification on next line.
+	cstDialer.Proxy = http.ProxyURL(surl)
+	cstDialer.ProxyConnectHeader = http.Header{"User-Agent": []string{"test-proxy-agent"}}
+
+	connect := false
+	origHandler := s.Server.Config.Handler
+
+	// Capture the request Host header.
+	s.Server.Config.Handler = http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			t.Logf("Request headers: %v", r.Header)
+			userAgent := r.Header.Get("User-Agent")
+			if r.Method == http.MethodConnect && userAgent == "test-proxy-agent" {
+				connect = true
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			if !connect {
+				t.Log("connect with proxy connect headers not received")
+				http.Error(w, "connect with proxy connect headers not received", http.StatusMethodNotAllowed)
+				return
+			}
+			origHandler.ServeHTTP(w, r)
+		})
+
+	ws, _, err := cstDialer.Dial(s.URL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer ws.Close()
+	sendRecv(t, ws)
+}
+
 func TestDial(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()
