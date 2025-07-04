@@ -44,16 +44,16 @@ func TestHTTPProxyAndBackend(t *testing.T) {
 	proxyTLS := false
 	// Start the websocket server, which echoes data back to sender.
 	websocketServer, websocketURL, err := newWebsocketServer(websocketTLS)
-	defer websocketServer.Close()
 	if err != nil {
 		t.Fatalf("error starting websocket server: %v", err)
 	}
+	defer websocketServer.Close()
 	// Start the proxy server.
 	proxyServer, proxyServerURL, err := newProxyServer(proxyTLS)
-	defer proxyServer.Close()
 	if err != nil {
 		t.Fatalf("error starting proxy server: %v", err)
 	}
+	defer proxyServer.Close()
 	// Dial the websocket server through the proxy server.
 	dialer := Dialer{
 		Proxy:        http.ProxyURL(proxyServerURL),
@@ -81,16 +81,16 @@ func TestHTTPProxyWithNetDial(t *testing.T) {
 	proxyTLS := false
 	// Start the websocket server, which echoes data back to sender.
 	websocketServer, websocketURL, err := newWebsocketServer(websocketTLS)
-	defer websocketServer.Close()
 	if err != nil {
 		t.Fatalf("error starting websocket server: %v", err)
 	}
+	defer websocketServer.Close()
 	// Start the proxy server.
 	proxyServer, proxyServerURL, err := newProxyServer(proxyTLS)
-	defer proxyServer.Close()
 	if err != nil {
 		t.Fatalf("error starting proxy server: %v", err)
 	}
+	defer proxyServer.Close()
 	// Dial the websocket server through the proxy server.
 	var netDialCalled atomic.Int64
 	dialer := Dialer{
@@ -126,16 +126,16 @@ func TestHTTPProxyWithNetDialContext(t *testing.T) {
 	proxyTLS := false
 	// Start the websocket server, which echoes data back to sender.
 	websocketServer, websocketURL, err := newWebsocketServer(websocketTLS)
-	defer websocketServer.Close()
 	if err != nil {
 		t.Fatalf("error starting websocket server: %v", err)
 	}
+	defer websocketServer.Close()
 	// Start the proxy server.
 	proxyServer, proxyServerURL, err := newProxyServer(proxyTLS)
-	defer proxyServer.Close()
 	if err != nil {
 		t.Fatalf("error starting proxy server: %v", err)
 	}
+	defer proxyServer.Close()
 	// Dial the websocket server through the proxy server.
 	var netDialCalled atomic.Int64
 	dialer := Dialer{
@@ -172,16 +172,16 @@ func TestHTTPProxyWithHTTPSBackend(t *testing.T) {
 	proxyTLS := false
 	// Start the websocket server, which echoes data back to sender.
 	websocketServer, websocketURL, err := newWebsocketServer(websocketTLS)
-	defer websocketServer.Close()
 	if err != nil {
 		t.Fatalf("error starting websocket server: %v", err)
 	}
+	defer websocketServer.Close()
 	// Start the proxy server.
 	proxyServer, proxyServerURL, err := newProxyServer(proxyTLS)
-	defer proxyServer.Close()
 	if err != nil {
 		t.Fatalf("error starting proxy server: %v", err)
 	}
+	defer proxyServer.Close()
 	var netDialTLSCalled atomic.Int64
 	dialer := Dialer{
 		Proxy: http.ProxyURL(proxyServerURL),
@@ -220,16 +220,16 @@ func TestHTTPSProxyAndBackend(t *testing.T) {
 	proxyTLS := true
 	// Start the websocket server, which echoes data back to sender.
 	websocketServer, websocketURL, err := newWebsocketServer(websocketTLS)
-	defer websocketServer.Close()
 	if err != nil {
 		t.Fatalf("error starting websocket server: %v", err)
 	}
+	defer websocketServer.Close()
 	// Start the proxy server.
 	proxyServer, proxyServerURL, err := newProxyServer(proxyTLS)
-	defer proxyServer.Close()
 	if err != nil {
 		t.Fatalf("error starting proxy server: %v", err)
 	}
+	defer proxyServer.Close()
 	dialer := Dialer{
 		Proxy:           http.ProxyURL(proxyServerURL),
 		TLSClientConfig: tlsConfig(websocketTLS, proxyTLS),
@@ -258,16 +258,16 @@ func TestHTTPSProxyUsingNetDial(t *testing.T) {
 	proxyTLS := true
 	// Start the websocket server, which echoes data back to sender.
 	websocketServer, websocketURL, err := newWebsocketServer(websocketTLS)
-	defer websocketServer.Close()
 	if err != nil {
 		t.Fatalf("error starting websocket server: %v", err)
 	}
+	defer websocketServer.Close()
 	// Start the proxy server.
 	proxyServer, proxyServerURL, err := newProxyServer(proxyTLS)
-	defer proxyServer.Close()
 	if err != nil {
 		t.Fatalf("error starting proxy server: %v", err)
 	}
+	defer proxyServer.Close()
 	var netDialCalled atomic.Int64
 	dialer := Dialer{
 		NetDial: func(network, addr string) (net.Conn, error) {
@@ -304,16 +304,16 @@ func TestHTTPSProxyUsingNetDialContext(t *testing.T) {
 	proxyTLS := true
 	// Start the websocket server, which echoes data back to sender.
 	websocketServer, websocketURL, err := newWebsocketServer(websocketTLS)
-	defer websocketServer.Close()
 	if err != nil {
 		t.Fatalf("error starting websocket server: %v", err)
 	}
+	defer websocketServer.Close()
 	// Start the proxy server.
 	proxyServer, proxyServerURL, err := newProxyServer(proxyTLS)
-	defer proxyServer.Close()
 	if err != nil {
 		t.Fatalf("error starting proxy server: %v", err)
 	}
+	defer proxyServer.Close()
 	var netDialCalled atomic.Int64
 	dialer := Dialer{
 		NetDialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -350,16 +350,16 @@ func TestHTTPSProxyUsingNetDialTLSContext(t *testing.T) {
 	proxyTLS := true
 	// Start the websocket server, which echoes data back to sender.
 	websocketServer, websocketURL, err := newWebsocketServer(websocketTLS)
-	defer websocketServer.Close()
 	if err != nil {
 		t.Fatalf("error starting websocket server: %v", err)
 	}
+	defer websocketServer.Close()
 	// Start the proxy server.
 	proxyServer, proxyServerURL, err := newProxyServer(proxyTLS)
-	defer proxyServer.Close()
 	if err != nil {
 		t.Fatalf("error starting proxy server: %v", err)
 	}
+	defer proxyServer.Close()
 	// Configure the proxy dialing function which dials the proxy and
 	// performs the TLS handshake.
 	var proxyDialCalled atomic.Int64
@@ -409,16 +409,16 @@ func TestHTTPSProxyHTTPBackend(t *testing.T) {
 	proxyTLS := true
 	// Start the websocket server, which echoes data back to sender.
 	websocketServer, websocketURL, err := newWebsocketServer(websocketTLS)
-	defer websocketServer.Close()
 	if err != nil {
 		t.Fatalf("error starting websocket server: %v", err)
 	}
+	defer websocketServer.Close()
 	// Start the proxy server.
 	proxyServer, proxyServerURL, err := newProxyServer(proxyTLS)
-	defer proxyServer.Close()
 	if err != nil {
 		t.Fatalf("error starting proxy server: %v", err)
 	}
+	defer proxyServer.Close()
 	dialer := Dialer{
 		Proxy:           http.ProxyURL(proxyServerURL),
 		TLSClientConfig: tlsConfig(websocketTLS, proxyTLS),
@@ -447,16 +447,16 @@ func TestHTTPSProxyUsingNetDialTLSContextWithHTTPBackend(t *testing.T) {
 	proxyTLS := true
 	// Start the websocket server, which echoes data back to sender.
 	websocketServer, websocketURL, err := newWebsocketServer(websocketTLS)
-	defer websocketServer.Close()
 	if err != nil {
 		t.Fatalf("error starting websocket server: %v", err)
 	}
+	defer websocketServer.Close()
 	// Start the proxy server.
 	proxyServer, proxyServerURL, err := newProxyServer(proxyTLS)
-	defer proxyServer.Close()
 	if err != nil {
 		t.Fatalf("error starting proxy server: %v", err)
 	}
+	defer proxyServer.Close()
 	var proxyDialCalled atomic.Int64
 	dialer := Dialer{
 		NetDialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -487,15 +487,15 @@ func TestTLSValidationErrors(t *testing.T) {
 	websocketTLS := true
 	proxyTLS := true
 	websocketServer, websocketURL, err := newWebsocketServer(websocketTLS)
-	defer websocketServer.Close()
 	if err != nil {
 		t.Fatalf("error starting websocket server: %v", err)
 	}
+	defer websocketServer.Close()
 	proxyServer, proxyServerURL, err := newProxyServer(proxyTLS)
-	defer proxyServer.Close()
 	if err != nil {
 		t.Fatalf("error starting proxy server: %v", err)
 	}
+	defer proxyServer.Close()
 	// Dialer without proxy CA cert fails TLS verification.
 	tlsError := "tls: failed to verify certificate"
 	dialer := Dialer{
@@ -535,10 +535,10 @@ func TestTLSValidationErrors(t *testing.T) {
 
 func TestProxyFnErrorIsPropagated(t *testing.T) {
 	websocketServer, websocketURL, err := newWebsocketServer(false)
-	defer websocketServer.Close()
 	if err != nil {
 		t.Fatalf("error starting websocket server: %v", err)
 	}
+	defer websocketServer.Close()
 	// Create a Dialer where Proxy function always returns an error.
 	proxyURLError := errors.New("proxy URL generation error")
 	dialer := Dialer{
@@ -561,15 +561,15 @@ func TestProxyFnNilMeansNoProxy(t *testing.T) {
 	websocketTLS := false
 	proxyTLS := false
 	websocketServer, websocketURL, err := newWebsocketServer(websocketTLS)
-	defer websocketServer.Close()
 	if err != nil {
 		t.Fatalf("error starting websocket server: %v", err)
 	}
+	defer websocketServer.Close()
 	proxyServer, _, err := newProxyServer(proxyTLS)
-	defer proxyServer.Close()
 	if err != nil {
 		t.Fatalf("error starting proxy server: %v", err)
 	}
+	defer proxyServer.Close()
 	// Dialer created with Proxy URL generation function returning nil
 	// proxy URL, which continues with backend server connection without
 	// proxying.
