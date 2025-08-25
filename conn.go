@@ -1206,6 +1206,7 @@ func (c *Conn) NetConn() net.Conn {
 
 // UnderlyingConn returns the internal net.Conn. This can be used to further
 // modifications to connection specific flags.
+//
 // Deprecated: Use the NetConn method.
 func (c *Conn) UnderlyingConn() net.Conn {
 	return c.conn
