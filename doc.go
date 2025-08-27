@@ -198,6 +198,11 @@
 // buffer size has a reduced impact on total memory use and has the benefit of
 // reducing system calls and frame overhead.
 //
+// Blocking
+//
+// Calls to WriteMessage and friends wait until the data is written to the kernel.
+// This operation can take an arbitrary amount of time.
+//
 // Compression EXPERIMENTAL
 //
 // Per message compression extensions (RFC 7692) are experimentally supported
