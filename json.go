@@ -12,7 +12,7 @@ import (
 // WriteJSON writes the JSON encoding of v as a message.
 //
 // Deprecated: Use c.WriteJSON instead.
-func WriteJSON(c *Conn, v interface{}) error {
+func WriteJSON(c *Conn, v any) error {
 	return c.WriteJSON(v)
 }
 
@@ -20,7 +20,7 @@ func WriteJSON(c *Conn, v interface{}) error {
 //
 // See the documentation for encoding/json Marshal for details about the
 // conversion of Go values to JSON.
-func (c *Conn) WriteJSON(v interface{}) error {
+func (c *Conn) WriteJSON(v any) error {
 	w, err := c.NextWriter(TextMessage)
 	if err != nil {
 		return err
@@ -37,7 +37,7 @@ func (c *Conn) WriteJSON(v interface{}) error {
 // it in the value pointed to by v.
 //
 // Deprecated: Use c.ReadJSON instead.
-func ReadJSON(c *Conn, v interface{}) error {
+func ReadJSON(c *Conn, v any) error {
 	return c.ReadJSON(v)
 }
 
@@ -46,7 +46,7 @@ func ReadJSON(c *Conn, v interface{}) error {
 //
 // See the documentation for the encoding/json Unmarshal function for details
 // about the conversion of JSON to a Go value.
-func (c *Conn) ReadJSON(v interface{}) error {
+func (c *Conn) ReadJSON(v any) error {
 	_, r, err := c.NextReader()
 	if err != nil {
 		return err
