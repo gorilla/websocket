@@ -575,34 +575,49 @@ func TestHandshake(t *testing.T) {
 func TestRespOnBadHandshake(t *testing.T) {
 	const expectedStatus = http.StatusGone
 	const expectedBody = "This is the response body."
-
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(expectedStatus)
-		_, _ = io.WriteString(w, expectedBody)
-	}))
-	defer s.Close()
-
-	ws, resp, err := cstDialer.Dial(makeWsProto(s.URL), nil)
-	if err == nil {
-		ws.Close()
-		t.Fatalf("Dial: nil")
+	const maxErrorResponseSize = 4096
+	tests := []struct {
+		name   string
+		body   []byte
+		lenMax int
+	}{
+		{"SmallerThanLimit", []byte(expectedBody), 1024}, // default value when MaxErrorBodySize is not set
+		{"LargerThanLimit", make([]byte, maxErrorResponseSize+100), maxErrorResponseSize},
+		{"ExactLimit", make([]byte, maxErrorResponseSize), maxErrorResponseSize},
 	}
 
-	if resp == nil {
-		t.Fatalf("resp=nil, err=%v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(expectedStatus)
+				_, _ = w.Write(tt.body)
+			}))
+			defer s.Close()
 
-	if resp.StatusCode != expectedStatus {
-		t.Errorf("resp.StatusCode=%d, want %d", resp.StatusCode, expectedStatus)
-	}
+			ws, resp, err := cstDialer.Dial(makeWsProto(s.URL), nil)
+			if err == nil {
+				ws.Close()
+				t.Fatalf("Dial: nil")
+			}
 
-	p, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("ReadFull(resp.Body) returned error %v", err)
-	}
+			if resp == nil {
+				t.Fatalf("resp=nil, err=%v", err)
+			}
 
-	if string(p) != expectedBody {
-		t.Errorf("resp.Body=%s, want %s", p, expectedBody)
+			if resp.StatusCode != expectedStatus {
+				t.Errorf("resp.StatusCode=%d, want %d", resp.StatusCode, expectedStatus)
+			}
+
+			p, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("ReadFull(resp.Body) returned error %v", err)
+			}
+
+			if len(p) > tt.lenMax {
+				t.Fatalf("body size=%d, want <= %d", len(p), tt.lenMax)
+			}
+		})
+
 	}
 }
 

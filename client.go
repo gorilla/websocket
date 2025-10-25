@@ -125,6 +125,11 @@ type Dialer struct {
 	// If Jar is nil, cookies are not sent in requests and ignored
 	// in responses.
 	Jar http.CookieJar
+
+	// MaxErrorBodySize specifies the maximum size of the error response buffer
+	// in the case of a bad hanshake. If zero, a defaut max size buffer of 1024 bytes
+	// is used.
+	MaxErrorBodySize int
 }
 
 // Dial creates a new client connection by calling DialContext with a background context.
@@ -364,9 +369,13 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		// Before closing the network connection on return from this
 		// function, slurp up some of the response to aid application
 		// debugging.
-		buf := make([]byte, 1024)
-		n, _ := io.ReadFull(resp.Body, buf)
-		resp.Body = io.NopCloser(bytes.NewReader(buf[:n]))
+		bufSize := 1024
+		if d.MaxErrorBodySize > 0 {
+			bufSize = d.MaxErrorBodySize
+		}
+		limReader := io.LimitReader(resp.Body, int64(bufSize))
+		buf, _ := io.ReadAll(limReader)
+		resp.Body = io.NopCloser(bytes.NewReader(buf))
 		return nil, resp, ErrBadHandshake
 	}
 
