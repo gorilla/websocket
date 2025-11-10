@@ -1009,7 +1009,14 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 		frameType, err := c.advanceFrame()
 		if err != nil {
 			c.readErr = hideTempErr(err)
+			if ne, ok := err.(net.Error); ok && (ne.Temporary() || ne.Timeout()) {
+				// temporary error, report it to the caller
+				return noFrame, nil, c.readErr
+			}
 			break
+		} else {
+			// reset on successful read
+			c.readErrCount = 0
 		}
 
 		if frameType == TextMessage || frameType == BinaryMessage {
