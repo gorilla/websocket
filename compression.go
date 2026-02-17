@@ -108,7 +108,7 @@ func (w *flateWriteWrapper) Write(p []byte) (int, error) {
 
 func (w *flateWriteWrapper) Close() error {
 	if w.fw == nil {
-		return errWriteClosed
+		return nil
 	}
 	err1 := w.fw.Flush()
 	w.p.Put(w.fw)
@@ -143,7 +143,7 @@ func (r *flateReadWrapper) Read(p []byte) (int, error) {
 
 func (r *flateReadWrapper) Close() error {
 	if r.fr == nil {
-		return io.ErrClosedPipe
+		return nil
 	}
 	err := r.fr.Close()
 	flateReaderPool.Put(r.fr)

@@ -77,3 +77,54 @@ func TestValidCompressionLevel(t *testing.T) {
 		}
 	}
 }
+
+func TestFlateReadWrapperDoubleClose(t *testing.T) {
+	var buf bytes.Buffer
+	c := newTestConn(nil, &buf, true)
+	c.newCompressionWriter = compressNoContextTakeover
+	c.enableWriteCompression = true
+
+	// Write a compressed message to get valid compressed data.
+	if err := c.WriteMessage(TextMessage, []byte("hello")); err != nil {
+		t.Fatal(err)
+	}
+
+	// Set up a reader connection with decompression.
+	rc := newTestConn(&buf, io.Discard, false)
+	rc.newDecompressionReader = decompressNoContextTakeover
+
+	_, r, err := rc.NextReader()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Read all data, which triggers preemptive close on EOF.
+	if _, err := io.ReadAll(r); err != nil {
+		t.Fatal(err)
+	}
+
+	// NextReader calls Close() again on the reader. This must not return an
+	// error because Close() should be idempotent per the fix for #859.
+	_, _, err = rc.NextReader()
+	// NextReader blocks waiting for the next frame. Since there's no more data,
+	// we expect an EOF-related error, not a close error.
+	if err != nil && err.Error() == "io: read/write on closed pipe" {
+		t.Fatal("Close() returned error on second call, should be idempotent")
+	}
+}
+
+func TestFlateWriteWrapperDoubleClose(t *testing.T) {
+	ww := &flateWriteWrapper{}
+	// Close on an already-nil writer should return nil, not an error.
+	if err := ww.Close(); err != nil {
+		t.Fatalf("expected nil error on double close of flateWriteWrapper, got: %v", err)
+	}
+}
+
+func TestFlateReadWrapperCloseIdempotent(t *testing.T) {
+	rw := &flateReadWrapper{}
+	// Close on an already-nil reader should return nil, not an error.
+	if err := rw.Close(); err != nil {
+		t.Fatalf("expected nil error on double close of flateReadWrapper, got: %v", err)
+	}
+}
