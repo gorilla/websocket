@@ -237,6 +237,14 @@ type BufferPool interface {
 // added to the pool.
 type writePoolData struct{ buf []byte }
 
+func ByteSliceTowritePoolData(b []byte) interface{} {
+        return writePoolData{b}
+}
+
+func WritePoolDataToByteSlice(b interface{}) []byte {
+        return b.(writePoolData).buf[:]
+}
+
 // The Conn type represents a WebSocket connection.
 type Conn struct {
 	conn        net.Conn
