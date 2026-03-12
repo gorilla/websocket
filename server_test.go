@@ -169,3 +169,71 @@ func TestHijack_NotSupported(t *testing.T) {
 		t.Fatalf("got err=%T and status_code=%d", err, recorder.Code)
 	}
 }
+
+func TestWriteBufferReuse(t *testing.T) {
+	// Test that Upgrader.Upgrade correctly reuses the hijacked write buffer
+	// from bufio.Writer.AvailableBuffer(). AvailableBuffer() returns a slice
+	// with len==0 and cap equal to the available buffer space, so the check
+	// must use cap(buf) instead of len(buf).
+
+	for _, tt := range []struct {
+		name       string
+		bufSize    int
+		wantReuse  bool
+	}{
+		{"large enough buffer", 4096, true},
+		{"too small buffer", 128, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var writeBuf bytes.Buffer
+			br := bufio.NewReaderSize(strings.NewReader(""), tt.bufSize)
+			bw := bufio.NewWriterSize(&writeBuf, tt.bufSize)
+
+			// Get the AvailableBuffer to compare addresses later.
+			availBuf := bw.AvailableBuffer()
+			if len(availBuf) != 0 {
+				t.Fatalf("AvailableBuffer len=%d, want 0", len(availBuf))
+			}
+			if cap(availBuf) != tt.bufSize {
+				t.Fatalf("AvailableBuffer cap=%d, want %d", cap(availBuf), tt.bufSize)
+			}
+
+			brw := bufio.NewReadWriter(br, bw)
+			resp := &reuseTestResponseWriter{
+				brw:            brw,
+				ResponseWriter: httptest.NewRecorder(),
+			}
+
+			upgrader := Upgrader{
+				CheckOrigin: func(r *http.Request) bool { return true },
+			}
+			c, err := upgrader.Upgrade(resp, &http.Request{
+				Method: http.MethodGet,
+				Header: http.Header{
+					"Upgrade":               []string{"websocket"},
+					"Connection":            []string{"upgrade"},
+					"Sec-Websocket-Key":     []string{"dGhlIHNhbXBsZSBub25jZQ=="},
+					"Sec-Websocket-Version": []string{"13"},
+				},
+			}, nil)
+			if err != nil {
+				t.Fatalf("Upgrade: %v", err)
+			}
+			defer c.Close()
+
+			if tt.wantReuse {
+				// When the buffer is large enough, the connection write buffer
+				// should be backed by the same underlying array as the hijacked
+				// writer's AvailableBuffer.
+				if cap(availBuf) > 0 && len(c.writeBuf) > 0 && &c.writeBuf[0] != &availBuf[:cap(availBuf)][0] {
+					t.Error("write buffer was not reused from hijacked connection")
+				}
+			} else {
+				// When the buffer is too small, a new buffer should be allocated.
+				if cap(availBuf) > 0 && len(c.writeBuf) > 0 && &c.writeBuf[0] == &availBuf[:cap(availBuf)][0] {
+					t.Error("write buffer was unexpectedly reused from small hijacked buffer")
+				}
+			}
+		})
+	}
+}

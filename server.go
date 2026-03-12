@@ -205,9 +205,9 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 	buf := brw.Writer.AvailableBuffer()
 
 	var writeBuf []byte
-	if u.WriteBufferPool == nil && u.WriteBufferSize == 0 && len(buf) >= maxFrameHeaderSize+256 {
+	if u.WriteBufferPool == nil && u.WriteBufferSize == 0 && cap(buf) >= maxFrameHeaderSize+256 {
 		// Reuse hijacked write buffer as connection buffer.
-		writeBuf = buf
+		writeBuf = buf[:cap(buf)]
 	}
 
 	c := newConn(netConn, true, u.ReadBufferSize, u.WriteBufferSize, u.WriteBufferPool, br, writeBuf)
@@ -220,7 +220,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 
 	// Use larger of hijacked buffer and connection write buffer for header.
 	p := buf
-	if len(c.writeBuf) > len(p) {
+	if len(c.writeBuf) > cap(p) {
 		p = c.writeBuf
 	}
 	p = p[:0]
@@ -353,7 +353,7 @@ type brNetConn struct {
 
 func (b *brNetConn) Read(p []byte) (n int, err error) {
 	if b.br != nil {
-		// Limit read to buferred data.
+		// Limit read to buffered data.
 		if n := b.br.Buffered(); len(p) > n {
 			p = p[:n]
 		}
