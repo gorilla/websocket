@@ -33,9 +33,7 @@ var preparedMessageTests = []struct {
 }
 
 func TestPreparedMessage(t *testing.T) {
-	testRand := rand.New(rand.NewSource(99))
 	prevMaskRand := maskRand
-	maskRand = testRand
 	defer func() { maskRand = prevMaskRand }()
 
 	for _, tt := range preparedMessageTests {
@@ -49,8 +47,11 @@ func TestPreparedMessage(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Seed random number generator for consistent frame mask.
-		testRand.Seed(1234)
+		// Use a fresh deterministic source for consistent frame mask.
+		// We create a new rand.New instead of calling Seed on an existing
+		// Rand because rand.Rand.Seed was deprecated in Go 1.20 and its
+		// behaviour changed across minor releases.
+		maskRand = rand.New(rand.NewSource(1234))
 
 		if err := c.WriteMessage(tt.messageType, data); err != nil {
 			t.Fatal(err)
@@ -65,8 +66,9 @@ func TestPreparedMessage(t *testing.T) {
 		// Scribble on data to ensure that NewPreparedMessage takes a snapshot.
 		copy(data, "hello world")
 
-		// Seed random number generator for consistent frame mask.
-		testRand.Seed(1234)
+		// Reset to the same deterministic source so prepared-message masking
+		// produces the same bytes as the direct write above.
+		maskRand = rand.New(rand.NewSource(1234))
 
 		buf.Reset()
 		if err := c.WritePreparedMessage(pm); err != nil {
