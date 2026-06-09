@@ -1012,18 +1012,16 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 		c.reader.Close()
 		c.reader = nil
 	}
-
 	c.messageReader = nil
 	c.readLength = 0
-
 	for c.readErr == nil {
 		frameType, err := c.advanceFrame()
 		if err != nil {
 			c.readErr = err
 			break
 		}
-
 		if frameType == TextMessage || frameType == BinaryMessage {
+			c.readErrCount = 0 // resets on success
 			c.messageReader = &messageReader{c}
 			c.reader = c.messageReader
 			if c.readDecompress {
@@ -1032,15 +1030,14 @@ func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 			return frameType, c.reader, nil
 		}
 	}
-
 	// Applications that do handle the error returned from this method spin in
 	// tight loop on connection failure. To help application developers detect
 	// this error, panic on repeated reads to the failed connection.
 	c.readErrCount++
-	if c.readErrCount >= 1000 {
-		panic("repeated read on failed websocket connection")
+	if c.readErrCount >= 2 {
+		panic("gorilla/websocket: application did not handle error from NextReader, error: " +
+			c.readErr.Error())
 	}
-
 	return noFrame, nil, c.readErr
 }
 
