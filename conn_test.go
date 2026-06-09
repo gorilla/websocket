@@ -744,3 +744,45 @@ func TestFailedConnectionReadPanic(t *testing.T) {
 	}
 	t.Fatal("should not get here")
 }
+
+func TestNextReadErrCountResetOnSuccess(t *testing.T) {
+	// setup a pipe to write a real websocket frame
+	r, w := io.Pipe()
+	conn := newTestConn(r, w, false) // client connection
+
+	// simulate accumulated errors from previous failures
+	conn.readErrCount = 1
+
+	// write a valid text frame from another goroutine
+	go func() {
+		serverConn := newTestConn(r, w, true) // server connection
+		serverConn.WriteMessage(TextMessage, []byte("Test"))
+	}()
+
+	// successful read should reset the counter
+	_, _, err := conn.NextReader()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if conn.readErrCount != 0 {
+		t.Errorf("expected readErrCount to be 0 after success, got %d", conn.readErrCount)
+	}
+}
+
+func TestNextReaderPanicsOnSecondFailedRead(t *testing.T) {
+	r, w := io.Pipe()
+	conn := newTestConn(r, w, false) // client connection
+
+	// force the connection into a permanently failed state
+	conn.readErr = errors.New("simulated failure")
+	conn.readErrCount = 1 // already had 1 failed read
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic on second read of failed connection, got none")
+		}
+	}()
+
+	conn.NextReader()
+}
