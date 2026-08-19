@@ -34,3 +34,16 @@ func TestJoinMessages(t *testing.T) {
 		}
 	}
 }
+
+func TestJoinMessagesEmpty(t *testing.T) {
+	var connBuf bytes.Buffer
+	rc := newTestConn(&connBuf, nil, false)
+	var result bytes.Buffer
+	_, err := io.Copy(&result, JoinMessages(rc, ","))
+	if IsUnexpectedCloseError(err, CloseAbnormalClosure) {
+		t.Errorf("unexpected error %v", err)
+	}
+	if result.Len() != 0 {
+		t.Errorf("got %q, want empty", result.String())
+	}
+}
