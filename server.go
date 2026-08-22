@@ -51,6 +51,12 @@ type Upgrader struct {
 	// requested by the client. If there's no match, then no protocol is
 	// negotiated (the Sec-Websocket-Protocol header is not included in the
 	// handshake response).
+	//
+	// When Subprotocols is not nil, built-in negotiation is used and any
+	// Sec-Websocket-Protocol value in responseHeader is ignored (it would have
+	// been better to return an error in that case, but the behavior is kept for
+	// compatibility). Leave Subprotocols nil to negotiate the subprotocol in
+	// application code instead.
 	Subprotocols []string
 
 	// Error specifies the function for generating HTTP error responses. If Error
@@ -116,8 +122,21 @@ func (u *Upgrader) selectSubprotocol(r *http.Request, responseHeader http.Header
 // Upgrade upgrades the HTTP server connection to the WebSocket protocol.
 //
 // The responseHeader is included in the response to the client's upgrade
-// request. Use the responseHeader to specify cookies (Set-Cookie). To specify
-// subprotocols supported by the server, set Upgrader.Subprotocols directly.
+// request. Use the responseHeader to specify cookies (Set-Cookie) and other
+// response headers.
+//
+// Subprotocol negotiation can be done in either of two ways:
+//
+//  1. Built-in: set Upgrader.Subprotocols to the server's supported protocols
+//     in preference order. Upgrade selects the first client-requested protocol
+//     that appears in that list (see Subprotocols). If there is no match, no
+//     protocol is negotiated.
+//  2. Application-managed: leave Upgrader.Subprotocols nil. Read the client's
+//     requested protocols with Subprotocols(r) and set the chosen protocol on
+//     the response with responseHeader.Set("Sec-Websocket-Protocol", proto).
+//
+// If Upgrader.Subprotocols is not nil, built-in negotiation wins and a
+// Sec-Websocket-Protocol value in responseHeader is ignored.
 //
 // If the upgrade fails, then Upgrade replies to the client with an HTTP error
 // response.
