@@ -140,7 +140,11 @@ func (e *CloseError) Error() string {
 	}
 	if e.Text != "" {
 		s = append(s, ": "...)
-		s = append(s, e.Text...)
+		text := e.Text
+		if len(text) > maxControlFramePayloadSize {
+			text = text[:maxControlFramePayloadSize]
+		}
+		s = append(s, text...)
 	}
 	return string(s)
 }
