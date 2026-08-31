@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"testing/iotest"
@@ -668,6 +669,18 @@ func TestCloseError(t *testing.T) {
 		if ok != tt.ok {
 			t.Errorf("IsCloseError(%#v, %#v) returned %v, want %v", tt.err, tt.codes, ok, tt.ok)
 		}
+	}
+}
+
+func TestCloseErrorTextIsBounded(t *testing.T) {
+	huge := strings.Repeat("x", 1<<20)
+	err := &CloseError{Code: CloseNormalClosure, Text: huge}
+	msg := err.Error()
+	if len(msg) > 64+maxControlFramePayloadSize {
+		t.Fatalf("Error() length %d exceeds bound", len(msg))
+	}
+	if !strings.Contains(msg, "websocket: close 1000") {
+		t.Fatalf("Error() = %q", msg)
 	}
 }
 
