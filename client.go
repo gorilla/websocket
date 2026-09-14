@@ -350,6 +350,7 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		}
 		return nil, nil, err
 	}
+	setResponseTLS(resp, netConn)
 
 	if d.Jar != nil {
 		if rc := resp.Cookies(); len(rc) > 0 {
@@ -502,6 +503,25 @@ func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 		return &tls.Config{}
 	}
 	return cfg.Clone()
+}
+
+// connectionStater is implemented by tls.Conn and custom TLS wrappers.
+type connectionStater interface {
+	ConnectionState() tls.ConnectionState
+}
+
+// setResponseTLS copies the TLS connection state onto resp, matching net/http
+// Transport so callers can inspect resp.TLS after DialContext on a wss URL.
+func setResponseTLS(resp *http.Response, conn net.Conn) {
+	if resp == nil {
+		return
+	}
+	cs, ok := conn.(connectionStater)
+	if !ok {
+		return
+	}
+	state := cs.ConnectionState()
+	resp.TLS = &state
 }
 
 func doHandshake(ctx context.Context, tlsConn *tls.Conn, cfg *tls.Config) error {
