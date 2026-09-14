@@ -246,11 +246,14 @@ func TestDial(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()
 
-	ws, _, err := cstDialer.Dial(s.URL, nil)
+	ws, resp, err := cstDialer.Dial(s.URL, nil)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
 	defer ws.Close()
+	if resp != nil && resp.TLS != nil {
+		t.Fatalf("Dial: resp.TLS = %+v, want nil on ws URL", resp.TLS)
+	}
 	sendRecv(t, ws)
 }
 
@@ -322,11 +325,17 @@ func TestDialTLS(t *testing.T) {
 
 	d := cstDialer
 	d.TLSClientConfig = &tls.Config{RootCAs: rootCAs(t, s.Server)}
-	ws, _, err := d.Dial(s.URL, nil)
+	ws, resp, err := d.Dial(s.URL, nil)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
 	defer ws.Close()
+	if resp == nil || resp.TLS == nil {
+		t.Fatalf("Dial TLS response: resp.TLS = nil, want connection state")
+	}
+	if !resp.TLS.HandshakeComplete {
+		t.Fatalf("Dial TLS response: HandshakeComplete = false")
+	}
 	sendRecv(t, ws)
 }
 
