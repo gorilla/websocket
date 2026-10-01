@@ -376,8 +376,37 @@ func (c *Conn) read(n int) ([]byte, error) {
 	return p, err
 }
 
+// acquireWriteMutex returns true if the write mutex was acquired before the
+// specified deadline.
+func (c *Conn) acquireWriteMutex(deadline time.Time) bool {
+	if deadline.IsZero() {
+		// No timeout for zero time.
+		<-c.mu
+		return true
+	}
+	d := time.Until(deadline)
+	if d < 0 {
+		return false
+	}
+	select {
+	case <-c.mu:
+		return true
+	default:
+		timer := time.NewTimer(d)
+		select {
+		case <-c.mu:
+			timer.Stop()
+			return true
+		case <-timer.C:
+			return false
+		}
+	}
+}
+
 func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error {
-	<-c.mu
+	if !c.acquireWriteMutex(deadline) {
+		return errWriteTimeout
+	}
 	defer func() { c.mu <- struct{}{} }()
 
 	c.writeErrMu.Lock()
@@ -438,27 +467,9 @@ func (c *Conn) WriteControl(messageType int, data []byte, deadline time.Time) er
 		maskBytes(key, 0, buf[6:])
 	}
 
-	if deadline.IsZero() {
-		// No timeout for zero time.
-		<-c.mu
-	} else {
-		d := time.Until(deadline)
-		if d < 0 {
-			return errWriteTimeout
-		}
-		select {
-		case <-c.mu:
-		default:
-			timer := time.NewTimer(d)
-			select {
-			case <-c.mu:
-				timer.Stop()
-			case <-timer.C:
-				return errWriteTimeout
-			}
-		}
+	if !c.acquireWriteMutex(deadline) {
+		return errWriteTimeout
 	}
-
 	defer func() { c.mu <- struct{}{} }()
 
 	c.writeErrMu.Lock()

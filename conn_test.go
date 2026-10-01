@@ -164,6 +164,84 @@ func TestWriteControlDeadline(t *testing.T) {
 	}
 }
 
+func TestWriteMessageDeadline(t *testing.T) {
+	t.Parallel()
+	message := []byte("hello")
+	var connBuf bytes.Buffer
+	c := newTestConn(nil, &connBuf, true)
+	if err := c.SetWriteDeadline(time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.WriteMessage(TextMessage, message); err != nil {
+		t.Errorf("WriteMessage(..., zero deadline) = %v, want nil", err)
+	}
+	if err := c.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.WriteMessage(TextMessage, message); err != nil {
+		t.Errorf("WriteMessage(..., future deadline) = %v, want nil", err)
+	}
+	if err := c.SetWriteDeadline(time.Now().Add(-time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.WriteMessage(TextMessage, message); err == nil {
+		t.Errorf("WriteMessage(..., past deadline) = nil, want timeout error")
+	}
+}
+
+func TestWriteMessageContendedDeadline(t *testing.T) {
+	t.Parallel()
+	var connBuf bytes.Buffer
+	c := newTestConn(nil, &connBuf, true)
+
+	// Acquire write mutex to simulate contention (e.g. concurrent WriteControl).
+	<-c.mu
+
+	if err := c.SetWriteDeadline(time.Now().Add(20 * time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+
+	start := time.Now()
+	err := c.WriteMessage(TextMessage, []byte("hello"))
+	duration := time.Since(start)
+
+	// Release mutex
+	c.mu <- struct{}{}
+
+	if err != errWriteTimeout {
+		t.Errorf("WriteMessage on contended mutex = %v, want %v", err, errWriteTimeout)
+	}
+	if duration > 500*time.Millisecond {
+		t.Errorf("WriteMessage blocked for %v, expected timeout around 20ms", duration)
+	}
+}
+
+func TestWritePreparedMessageDeadline(t *testing.T) {
+	t.Parallel()
+	pm, err := NewPreparedMessage(TextMessage, []byte("hello"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var connBuf bytes.Buffer
+	c := newTestConn(nil, &connBuf, true)
+
+	// Acquire write mutex to simulate contention.
+	<-c.mu
+
+	if err := c.SetWriteDeadline(time.Now().Add(20 * time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+
+	err = c.WritePreparedMessage(pm)
+
+	// Release mutex
+	c.mu <- struct{}{}
+
+	if err != errWriteTimeout {
+		t.Errorf("WritePreparedMessage on contended mutex = %v, want %v", err, errWriteTimeout)
+	}
+}
+
 func TestConcurrencyWriteControl(t *testing.T) {
 	const message = "this is a ping/pong messsage"
 	loop := 10
