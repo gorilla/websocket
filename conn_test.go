@@ -691,6 +691,57 @@ func TestUnexpectedCloseErrors(t *testing.T) {
 	}
 }
 
+// From RFC 6455, Section 5.5.1:
+//
+//	If there is a body, the first two bytes of the body MUST be a 2-byte
+//	unsigned integer (in network byte order) representing a status code.
+//
+// A close frame with a body too short to hold the status code is a protocol
+// error and the connection must be failed.
+var closeFramePayloadLengthTests = []struct {
+	name      string
+	payload   []byte
+	wantCode  int    // status code of the expected *CloseError
+	wantError string // expected error string; empty means a *CloseError is expected
+}{
+	{name: "no body", payload: nil, wantCode: CloseNoStatusReceived},
+	{name: "1 byte body", payload: []byte{0x03}, wantError: "websocket: close frame with 1 byte payload"},
+	{name: "2 byte body", payload: []byte{0x03, 0xe8}, wantCode: CloseNormalClosure},
+	{name: "2 byte body with invalid code", payload: []byte{0x03, 0xed}, wantError: "websocket: bad close code 1005"},
+	{name: "3 byte body", payload: []byte{0x03, 0xe8, '!'}, wantCode: CloseNormalClosure},
+}
+
+func TestCloseFramePayloadLength(t *testing.T) {
+	for _, tt := range closeFramePayloadLengthTests {
+		t.Run(tt.name, func(t *testing.T) {
+			var b1, b2 bytes.Buffer
+			// Server connections read masked frames. A zero mask key is the
+			// identity, so the payload is written as is.
+			b1.WriteByte(finalBit | byte(CloseMessage))
+			b1.WriteByte(maskBit | byte(len(tt.payload)))
+			b1.Write([]byte{0x00, 0x00, 0x00, 0x00})
+			b1.Write(tt.payload)
+
+			rc := newTestConn(&b1, &b2, true)
+			_, _, err := rc.NextReader()
+
+			if tt.wantError != "" {
+				if err == nil || err.Error() != tt.wantError {
+					t.Fatalf("NextReader() returned %v, want %v", err, tt.wantError)
+				}
+				return
+			}
+			ce, ok := err.(*CloseError)
+			if !ok {
+				t.Fatalf("NextReader() returned %v (%T), want *CloseError", err, err)
+			}
+			if ce.Code != tt.wantCode {
+				t.Errorf("NextReader() returned close code %d, want %d", ce.Code, tt.wantCode)
+			}
+		})
+	}
+}
+
 type blockingWriter struct {
 	c1, c2 chan struct{}
 }

@@ -967,6 +967,16 @@ func (c *Conn) advanceFrame() (int, error) {
 	case CloseMessage:
 		closeCode := CloseNoStatusReceived
 		closeText := ""
+		// From RFC 6455, Section 5.5.1:
+		//
+		//    If there is a body, the first two bytes of the body MUST be a
+		//    2-byte unsigned integer (in network byte order) representing a
+		//    status code.
+		//
+		// A body too short to hold the status code is a protocol error.
+		if len(payload) == 1 {
+			return noFrame, c.handleProtocolError("close frame with 1 byte payload")
+		}
 		if len(payload) >= 2 {
 			closeCode = int(binary.BigEndian.Uint16(payload))
 			if !isValidReceivedCloseCode(closeCode) {
