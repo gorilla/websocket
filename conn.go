@@ -681,7 +681,7 @@ func (w *messageWriter) Write(p []byte) (int, error) {
 	for len(p) > 0 {
 		n, err := w.ncopy(len(p))
 		if err != nil {
-			return 0, err
+			return nn - len(p), err
 		}
 		copy(w.c.writeBuf[w.pos:], p[:n])
 		w.pos += n
@@ -699,7 +699,7 @@ func (w *messageWriter) WriteString(p string) (int, error) {
 	for len(p) > 0 {
 		n, err := w.ncopy(len(p))
 		if err != nil {
-			return 0, err
+			return nn - len(p), err
 		}
 		copy(w.c.writeBuf[w.pos:], p[:n])
 		w.pos += n
