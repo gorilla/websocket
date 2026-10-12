@@ -11,6 +11,15 @@ import (
 	"time"
 )
 
+// preparedWriteBufferPool holds scratch buffers used only while constructing
+// prepared frames. The resulting frame bytes are owned by prepareConn.buf and
+// must never be returned to this pool.
+var preparedWriteBufferPool = sync.Pool{
+	New: func() interface{} {
+		return new([defaultWriteBufferSize + maxFrameHeaderSize]byte)
+	},
+}
+
 // PreparedMessage caches on the wire representations of a message payload.
 // Use PreparedMessage to efficiently send a message payload to multiple
 // connections. PreparedMessage is especially useful when compression is used
@@ -70,6 +79,9 @@ func (pm *PreparedMessage) frame(key prepareKey) (int, []byte, error) {
 
 	var err error
 	frame.once.Do(func() {
+		writeBuf := preparedWriteBufferPool.Get().(*[defaultWriteBufferSize + maxFrameHeaderSize]byte)
+		defer preparedWriteBufferPool.Put(writeBuf)
+
 		// Prepare a frame using a 'fake' connection.
 		// TODO: Refactor code in conn.go to allow more direct construction of
 		// the frame.
@@ -82,7 +94,7 @@ func (pm *PreparedMessage) frame(key prepareKey) (int, []byte, error) {
 			isServer:               key.isServer,
 			compressionLevel:       key.compressionLevel,
 			enableWriteCompression: true,
-			writeBuf:               make([]byte, defaultWriteBufferSize+maxFrameHeaderSize),
+			writeBuf:               writeBuf[:],
 		}
 		if key.compress {
 			c.newCompressionWriter = compressNoContextTakeover
