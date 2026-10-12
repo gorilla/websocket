@@ -35,7 +35,7 @@ var preparedMessageTests = []struct {
 func TestPreparedMessage(t *testing.T) {
 	testRand := rand.New(rand.NewSource(99))
 	prevMaskRand := maskRand
-	maskRand = testRand
+	maskRand = testRand.Read
 	defer func() { maskRand = prevMaskRand }()
 
 	for _, tt := range preparedMessageTests {

@@ -180,15 +180,14 @@ var (
 	errInvalidControlFrame = errors.New("websocket: invalid control frame")
 )
 
-// maskRand is an io.Reader for generating mask bytes. The reader is initialized
-// to crypto/rand Reader. Tests swap the reader to a math/rand reader for
-// reproducible results.
-var maskRand = rand.Reader
+// maskRand generates random mask bytes. Tests replace it with a
+// deterministic implementation for reproducibility.
+var maskRand = rand.Read
 
 // newMaskKey returns a new 32 bit value for masking client frames.
 func newMaskKey() [4]byte {
 	var k [4]byte
-	_, _ = io.ReadFull(maskRand, k[:])
+	maskRand(k[:])
 	return k
 }
 
