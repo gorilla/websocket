@@ -262,7 +262,7 @@ func TestPreparedMessageInvalidInput(t *testing.T) {
 }
 
 func BenchmarkPreparedMessageConstruction(b *testing.B) {
-	for _, size := range []int{245, 856, 2087, 8244} {
+	for _, size := range []int{256, 1024, 4096, 8192} {
 		for _, random := range []bool{false, true} {
 			messageType := TextMessage
 			pattern := []byte("prepared-message-payload-")
