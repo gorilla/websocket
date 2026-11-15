@@ -266,7 +266,7 @@ type Conn struct {
 	// bytes remaining in current frame.
 	// set setReadRemaining to safely update this value and prevent overflow
 	readRemaining int64
-	readFinal     bool  // true the current message has more frames.
+	readFinal     bool  // true when no continuation frames are expected.
 	readLength    int64 // Message size.
 	readLimit     int64 // Maximum message size.
 	readMaskPos   int
@@ -741,6 +741,9 @@ func (w *messageWriter) Close() error {
 }
 
 // WritePreparedMessage writes prepared message into connection.
+// It does not close a previous message writer. Before writing a prepared
+// TextMessage or BinaryMessage, the application must close any writer returned
+// by NextWriter.
 func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 	frameType, frameData, err := pm.frame(prepareKey{
 		isServer:         c.isServer,
