@@ -922,8 +922,11 @@ func (c *Conn) advanceFrame() (int, error) {
 	// 5. For text and binary messages, enforce read limit and return.
 
 	if frameType == continuationFrame || frameType == TextMessage || frameType == BinaryMessage {
-
-		c.readLength += c.readRemaining
+		if frameType == continuationFrame {
+			c.readLength += c.readRemaining
+		} else {
+			c.readLength = c.readRemaining
+		}
 		// Don't allow readLength to overflow in the presence of a large readRemaining
 		// counter.
 		if c.readLength < 0 {

@@ -744,3 +744,49 @@ func TestFailedConnectionReadPanic(t *testing.T) {
 	}
 	t.Fatal("should not get here")
 }
+
+func TestAbandonedMessageReadLimit(t *testing.T) {
+	for _, abandon := range []bool{false, true} {
+		var wire bytes.Buffer
+		writer := newConn(fakeNetConn{Writer: &wire}, false, 1024, 64, nil, nil, nil)
+		w, err := writer.NextWriter(TextMessage)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = w.Write(bytes.Repeat([]byte("a"), 90)); err != nil {
+			t.Fatal(err)
+		}
+		if err = w.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err = writer.WriteMessage(TextMessage, bytes.Repeat([]byte("b"), 80)); err != nil {
+			t.Fatal(err)
+		}
+
+		reader := newTestConn(&wire, io.Discard, true)
+		reader.SetReadLimit(100)
+		_, r, err := reader.NextReader()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if abandon {
+			_, err = io.ReadFull(r, make([]byte, 10))
+		} else {
+			_, err = io.Copy(io.Discard, r)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, r, nextErr := reader.NextReader()
+		if nextErr != nil {
+			t.Fatalf("second NextReader: %v", nextErr)
+		}
+		p, readErr := io.ReadAll(r)
+		t.Logf("abandon=%v: NextReader err=%v; ReadAll err=%v; bytes=%d", abandon, nextErr, readErr, len(p))
+		if readErr != nil || !bytes.Equal(p, bytes.Repeat([]byte("b"), 80)) {
+			t.Errorf("abandon=%v: expected all 80 bytes of message B without error", abandon)
+			_, _, subsequentErr := reader.NextReader()
+			t.Logf("subsequent NextReader err=%v", subsequentErr)
+		}
+	}
+}
