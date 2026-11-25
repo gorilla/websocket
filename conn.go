@@ -393,7 +393,10 @@ func (c *Conn) write(frameType int, deadline time.Time, buf0, buf1 []byte) error
 	if len(buf1) == 0 {
 		_, err = c.conn.Write(buf0)
 	} else {
-		err = c.writeBufs(buf0, buf1)
+		buf := make([]byte, 0, len(buf0)+len(buf1))
+		buf = append(buf, buf0...)
+		buf = append(buf, buf1...)
+		_, err = c.conn.Write(buf)
 	}
 	if err != nil {
 		return c.writeFatal(err)

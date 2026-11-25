@@ -240,6 +240,27 @@ func (p *simpleBufferPool) Put(v interface{}) {
 	p.v = v
 }
 
+type countingWriter struct {
+	bytes.Buffer
+	writes int
+}
+
+func (w *countingWriter) Write(p []byte) (int, error) {
+	w.writes++
+	return w.Buffer.Write(p)
+}
+
+func TestWriteUsesSingleNetworkWrite(t *testing.T) {
+	w := &countingWriter{}
+	c := newTestConn(nil, w, true)
+	if err := c.write(TextMessage, time.Time{}, []byte{byte(TextMessage) | finalBit, 10}, []byte("helloworld")); err != nil {
+		t.Fatal(err)
+	}
+	if w.writes != 1 {
+		t.Fatalf("expected one network write, got %d", w.writes)
+	}
+}
+
 func TestWriteBufferPool(t *testing.T) {
 	const message = "Now is the time for all good people to come to the aid of the party."
 
